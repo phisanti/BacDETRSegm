@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bacdetr-train"
+version = "2.0.0"
+description = "BacDETR Training Package"
+readme = "README.md"
+authors = [
+    {name = "Boeck Lab", email = "your-email@example.com"}
+]
+license = {text = "Apache License 2.0"}
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["machine-learning", "deep-learning", "vision", "DETR", "training"]
+
+dependencies = [
+    "bacdetr>=2.0.0",
+    "cython",
+    "pycocotools",
+    "fairscale",
+    "accelerate",
+    "transformers",
+    "peft",
+    "tqdm",
+    "pandas",
+    "matplotlib",
+    "roboflow",
+    "rf100vl",
+    "supervision",
+    "pylabel",
+    "polygraphy",
+    "open_clip_torch",
+]
+
+[project.optional-dependencies]
+onnx = [
+    "onnx",
+    "onnxsim",
+    "onnx_graphsurgeon",
+    "onnxruntime"
+]
+metrics = [
+    "tensorboard>=2.13.0",
+    "wandb"
+]
+all = [
+    "onnx",
+    "onnxsim",
+    "onnx_graphsurgeon",
+    "onnxruntime",
+    "tensorboard>=2.13.0",
+    "wandb"
+]
+
+[project.scripts]
+bacdetr-train = "bacdetr_train.cli.main:trainer"
+
+[tool.setuptools.packages.find]
+include = ["bacdetr_train*"]
+
+[tool.setuptools]
+include-package-data = false
