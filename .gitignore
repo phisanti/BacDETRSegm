@@ -182,5 +182,6 @@ output/*
 # Training and developing
 experiments/
 configs/
+AGENTS.md
 
 train_test.py
