@@ -228,27 +228,28 @@ class GradientChannelAdapter(nn.Module):
         Returns:
             Output tensor of shape (B, 3, H', W')
             where H', W' = target_resolution if specified, else H, W
+
+        Output format: [original_image, dx, dy]
+        - Channel 0: Original grayscale image [0, 1]
+        - Channel 1: Horizontal gradient dx (typically [-1, 1])
+        - Channel 2: Vertical gradient dy (typically [-1, 1])
         """
+        # Store original input
+        original = x  # [B, 1, H, W]
+
         # Forward through pre-trained gradient model
-        x = self.model(x)
+        gradients = self.model(x)  # [B, 2, H, W] with [dx, dy]
 
-        # If output is 2 channels (dx, dy), replicate to 3 channels for RGB compatibility
-        if x.shape[1] == 2:
-            # Option 1: Replicate the first channel [dx, dy, dx]
-            # Option 2: Compute magnitude and use [dx, dy, magnitude]
-            # We'll use option 2 for better representation
-            magnitude = torch.sqrt(x[:, 0:1]**2 + x[:, 1:2]**2)
-            x = torch.cat([x, magnitude], dim=1)
+        # Ensure we have 2 gradient channels
+        if gradients.shape[1] != 2:
+            raise ValueError(
+                f"Gradient model should output 2 channels [dx, dy], "
+                f"got {gradients.shape[1]} channels"
+            )
 
-        # Ensure output is 3 channels
-        if x.shape[1] > 3:
-            # If model outputs more than 3 channels, take first 3
-            x = x[:, :3]
-        elif x.shape[1] < 3:
-            # If less than 3, pad with zeros
-            padding = torch.zeros(x.shape[0], 3 - x.shape[1], x.shape[2], x.shape[3],
-                                 device=x.device, dtype=x.dtype)
-            x = torch.cat([x, padding], dim=1)
+        # Concatenate: [original, dx, dy]
+        # This preserves both gradient magnitude AND direction
+        x = torch.cat([original, gradients], dim=1)  # [B, 3, H, W]
 
         # Optional upsampling to target resolution
         if self.target_resolution is not None:
