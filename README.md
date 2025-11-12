@@ -76,8 +76,22 @@ RF-DETR supplies the backbone, projector, transformer decoder, and segmentation 
 ## 6. Usage
 
 ### Environment
+This repository ships two coordinated Python packages:
+- `bacdetr/`: inference/model-architecture library (adapters, heads, checkpoints).
+- `bacdetr-train/`: training CLI/tooling that depends on the `bacdetr` package.
+
+Clone the repo and install both packages (editable mode recommended while iterating):
 ```bash
-pip install -e .
+git clone https://github.com/phisanti/BacDETRSegm.git
+cd BacDETRSegm
+pip install -e ./bacdetr
+pip install -e ./bacdetr-train
+```
+
+Optional extras:
+```bash
+pip install -e "./bacdetr[viz]"              # visualization helpers for inference
+pip install -e "./bacdetr-train[all]"        # ONNX export + logging integrations
 ```
 
 ### Dataset Preparation
