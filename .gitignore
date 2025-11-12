@@ -179,4 +179,8 @@ cython_debug/
 rf-detr*
 output/*
 
+# Training and developing
+experiments/
+configs/
+
 train_test.py

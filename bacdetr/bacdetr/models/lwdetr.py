@@ -48,7 +48,8 @@ class LWDETR(nn.Module):
                  group_detr=1,
                  two_stage=False,
                  lite_refpoint_refine=False,
-                 bbox_reparam=False):
+                 bbox_reparam=False,
+                 channel_adapter=None):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -59,6 +60,7 @@ class LWDETR(nn.Module):
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
             group_detr: Number of groups to speed detr training. Default is 1.
             lite_refpoint_refine: TODO
+            channel_adapter: Optional channel adapter module (grayscale -> RGB conversion)
         """
         super().__init__()
         self.num_queries = num_queries
@@ -67,12 +69,13 @@ class LWDETR(nn.Module):
         self.class_embed = nn.Linear(hidden_dim, num_classes)
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.segmentation_head = segmentation_head
-        
+
         query_dim=4
         self.refpoint_embed = nn.Embedding(num_queries * group_detr, query_dim)
         self.query_feat = nn.Embedding(num_queries * group_detr, hidden_dim)
         nn.init.constant_(self.refpoint_embed.weight.data, 0)
 
+        self.channel_adapter = channel_adapter
         self.backbone = backbone
         self.aux_loss = aux_loss
         self.group_detr = group_detr
@@ -145,6 +148,12 @@ class LWDETR(nn.Module):
         """
         if isinstance(samples, (list, torch.Tensor)):
             samples = nested_tensor_from_tensor_list(samples)
+
+        # Apply channel adapter if present (grayscale -> pseudo-RGB)
+        if self.channel_adapter is not None:
+            adapted_tensors = self.channel_adapter(samples.tensors)
+            samples = NestedTensor(adapted_tensors, samples.mask)
+
         features, poss = self.backbone(samples)
 
         srcs = []
@@ -214,6 +223,10 @@ class LWDETR(nn.Module):
         return out
 
     def forward_export(self, tensors):
+        # Apply channel adapter if present (grayscale -> pseudo-RGB)
+        if self.channel_adapter is not None:
+            tensors = self.channel_adapter(tensors)
+
         srcs, _, poss = self.backbone(tensors)
         # only use one group in inference
         refpoint_embed_weight = self.refpoint_embed.weight[:self.num_queries]
@@ -779,6 +792,62 @@ def build_model(args):
     num_classes = args.num_classes + 1
     device = torch.device(args.device)
 
+    # Build channel adapter if configured
+    channel_adapter = None
+    if hasattr(args, 'channel_adapter') and args.channel_adapter is not None:
+        from bacdetr.models.channel_adapter import build_channel_adapter
+
+        adapter_config = args.channel_adapter
+        if isinstance(adapter_config, dict):
+            # If adapter_config is a dict, extract parameters
+            enabled = adapter_config.get('enabled', False)
+        else:
+            # If it's a config object (pydantic model)
+            enabled = getattr(adapter_config, 'enabled', False)
+
+        if enabled:
+            # Determine target resolution from model config
+            target_resolution = args.resolution if hasattr(args, 'resolution') else None
+
+            if isinstance(adapter_config, dict):
+                # Extract parameters from dict
+                adapter_type = adapter_config.get('adapter_type', 'residual')
+                in_channels = adapter_config.get('in_channels', 1)
+                out_channels = adapter_config.get('out_channels', 3)
+                num_blocks = adapter_config.get('num_blocks', 2)
+                intermediate_dim = adapter_config.get('intermediate_dim', 32)
+                drop_path = adapter_config.get('drop_path', 0.0)
+                model_name = adapter_config.get('model_name', None)
+                weights_path = adapter_config.get('weights_path', None)
+                freeze = adapter_config.get('freeze', False)
+                # Allow override of target_resolution from adapter config
+                target_resolution = adapter_config.get('target_resolution', target_resolution)
+            else:
+                # Extract parameters from config object
+                adapter_type = adapter_config.adapter_type
+                in_channels = adapter_config.in_channels
+                out_channels = adapter_config.out_channels
+                num_blocks = adapter_config.num_blocks
+                intermediate_dim = adapter_config.intermediate_dim
+                drop_path = adapter_config.drop_path
+                model_name = adapter_config.model_name
+                weights_path = adapter_config.weights_path
+                freeze = adapter_config.freeze
+                target_resolution = adapter_config.target_resolution or target_resolution
+
+            channel_adapter = build_channel_adapter(
+                adapter_type=adapter_type,
+                in_channels=in_channels,
+                out_channels=out_channels,
+                num_blocks=num_blocks,
+                intermediate_dim=intermediate_dim,
+                drop_path=drop_path,
+                target_resolution=target_resolution,
+                model_name=model_name,
+                weights_path=weights_path,
+                freeze=freeze,
+            )
+            print(f"Built channel adapter: {adapter_type} ({in_channels}->{out_channels} channels)")
 
     backbone = build_backbone(
         encoder=args.encoder,
@@ -825,6 +894,7 @@ def build_model(args):
         two_stage=args.two_stage,
         lite_refpoint_refine=args.lite_refpoint_refine,
         bbox_reparam=args.bbox_reparam,
+        channel_adapter=channel_adapter,
     )
     return model
 

@@ -8,10 +8,36 @@
 # ------------------------------------------------------------------------
 
 
-from pydantic import BaseModel
-from typing import List, Optional, Literal, Type
+from pydantic import BaseModel, Field
+from typing import List, Optional, Literal, Type, Union
 import torch
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+
+
+class ChannelAdapterConfig(BaseModel):
+    """Configuration for channel adapter (grayscale -> pseudo-RGB conversion)."""
+    enabled: bool = False
+    adapter_type: Literal["residual", "convnext", "gradient", "pretrained"] = "residual"
+
+    # For residual and convnext adapters
+    in_channels: int = 1
+    out_channels: int = 3
+    num_blocks: int = 2
+    intermediate_dim: int = 32
+    drop_path: float = 0.0
+
+    # For pretrained adapters (GradConvNeXt/UNeXt)
+    model_name: Optional[str] = None  # e.g., "gradconvnext_atto", "gradconvunext_small"
+    weights_path: Optional[str] = None
+
+    # Training control
+    freeze: bool = False
+
+    # Optional upsampling to match backbone input resolution
+    # If None, no upsampling is applied (assumes input already at correct size)
+    # If specified (e.g., 312, 384, 432), will upsample after channel conversion
+    target_resolution: Optional[int] = None
+
 
 class ModelConfig(BaseModel):
     encoder: Literal["dinov2_windowed_small", "dinov2_windowed_base"]
@@ -40,6 +66,8 @@ class ModelConfig(BaseModel):
     cls_loss_coef: float = 1.0
     segmentation_head: bool = False
     mask_downsample_ratio: int = 4
+    in_chans: int = 3  # Input channels (1 for grayscale, 3 for RGB)
+    channel_adapter: Optional[ChannelAdapterConfig] = None
 
 
 class RFDETRBaseConfig(ModelConfig):
