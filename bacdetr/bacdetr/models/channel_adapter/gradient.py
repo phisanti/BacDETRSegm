@@ -76,6 +76,7 @@ class GradientChannelAdapter(nn.Module):
         weights_path: Path to the pre-trained weights file
         target_resolution: Optional target resolution for upsampling (e.g., 312, 384, 432)
         freeze: Whether to freeze the model after loading (default: False)
+        apply_scaling: Whether to apply linear scaling to gradients from [-1,1] to [0,1] (default: True)
     """
     def __init__(
         self,
@@ -83,11 +84,13 @@ class GradientChannelAdapter(nn.Module):
         weights_path: Optional[str] = None,
         target_resolution: Optional[int] = None,
         freeze: bool = False,
+        apply_scaling: bool = True,
     ):
         super().__init__()
         self.model_name = model_name
         self.weights_path = weights_path
         self.target_resolution = target_resolution
+        self.apply_scaling = apply_scaling
 
         # Build the gradient model
         self.model = self._build_model(model_name)
@@ -223,7 +226,7 @@ class GradientChannelAdapter(nn.Module):
         Forward pass.
 
         Args:
-            x: Input tensor of shape (B, in_channels, H, W)
+            x: Input tensor of shape (B, in_channels, H, W) in range [0, 1]
 
         Returns:
             Output tensor of shape (B, 3, H', W')
@@ -231,14 +234,14 @@ class GradientChannelAdapter(nn.Module):
 
         Output format: [original_image, dx, dy]
         - Channel 0: Original grayscale image [0, 1]
-        - Channel 1: Horizontal gradient dx (typically [-1, 1])
-        - Channel 2: Vertical gradient dy (typically [-1, 1])
+        - Channel 1: Horizontal gradient dx (scaled to [0, 1] if apply_scaling=True, else [-1, 1])
+        - Channel 2: Vertical gradient dy (scaled to [0, 1] if apply_scaling=True, else [-1, 1])
         """
         # Store original input
-        original = x  # [B, 1, H, W]
+        original = x  # [B, 1, H, W] in [0, 1]
 
         # Forward through pre-trained gradient model
-        gradients = self.model(x)  # [B, 2, H, W] with [dx, dy]
+        gradients = self.model(x)  # [B, 2, H, W] with [dx, dy] in [-1, 1]
 
         # Ensure we have 2 gradient channels
         if gradients.shape[1] != 2:
@@ -247,9 +250,19 @@ class GradientChannelAdapter(nn.Module):
                 f"got {gradients.shape[1]} channels"
             )
 
+        # Extract gradient channels
+        dx, dy = gradients[:, 0:1], gradients[:, 1:2]
+
+        # Apply linear scaling if enabled
+        if self.apply_scaling:
+            # Linear scaling: [-1, 1] → [0, 1]
+            # This preserves gradient magnitude and direction while making them
+            # compatible with DinoV2 normalization (which will be applied later)
+            dx = (dx + 1.0) / 2.0
+            dy = (dy + 1.0) / 2.0
+
         # Concatenate: [original, dx, dy]
-        # This preserves both gradient magnitude AND direction
-        x = torch.cat([original, gradients], dim=1)  # [B, 3, H, W]
+        x = torch.cat([original, dx, dy], dim=1)  # [B, 3, H, W]
 
         # Optional upsampling to target resolution
         if self.target_resolution is not None:

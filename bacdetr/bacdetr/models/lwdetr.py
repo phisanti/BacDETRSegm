@@ -49,7 +49,8 @@ class LWDETR(nn.Module):
                  two_stage=False,
                  lite_refpoint_refine=False,
                  bbox_reparam=False,
-                 channel_adapter=None):
+                 channel_adapter=None,
+                 post_adapter_normalization=None):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -76,6 +77,7 @@ class LWDETR(nn.Module):
         nn.init.constant_(self.refpoint_embed.weight.data, 0)
 
         self.channel_adapter = channel_adapter
+        self.post_adapter_norm = post_adapter_normalization
         self.backbone = backbone
         self.aux_loss = aux_loss
         self.group_detr = group_detr
@@ -154,6 +156,11 @@ class LWDETR(nn.Module):
             adapted_tensors = self.channel_adapter(samples.tensors)
             samples = NestedTensor(adapted_tensors, samples.mask)
 
+        # Apply normalization after adapter to feed tensors scaled for DinoV2 pre-trained models
+        if self.post_adapter_norm is not None:
+            normalized_tensors = self.post_adapter_norm(samples.tensors)
+            samples = NestedTensor(normalized_tensors, samples.mask)
+
         features, poss = self.backbone(samples)
 
         srcs = []
@@ -226,6 +233,10 @@ class LWDETR(nn.Module):
         # Apply channel adapter if present (grayscale -> pseudo-RGB)
         if self.channel_adapter is not None:
             tensors = self.channel_adapter(tensors)
+
+        # Apply normalization after adapter to feed tensors scaled for DinoV2 pre-trained models
+        if self.post_adapter_norm is not None:
+            tensors = self.post_adapter_norm(tensors)
 
         srcs, _, poss = self.backbone(tensors)
         # only use one group in inference
@@ -849,6 +860,21 @@ def build_model(args):
             )
             print(f"Built channel adapter: {adapter_type} ({in_channels}->{out_channels} channels)")
 
+    # Build post-adapter normalization if configured
+    post_adapter_norm = None
+    if channel_adapter is not None:
+        # Check if post-adapter normalization is enabled
+        normalize_after = getattr(args, 'post_adapter_normalization', True)
+        if normalize_after:
+            from bacdetr.models.channel_adapter.normalization import ImageNormalization
+
+            # Use DinoV2 statistics (ImageNet means/stds)
+            mean = [0.485, 0.456, 0.406]
+            std = [0.229, 0.224, 0.225]
+
+            post_adapter_norm = ImageNormalization(mean=mean, std=std)
+            print(f"Built post-adapter normalization: mean={mean}, std={std}")
+
     backbone = build_backbone(
         encoder=args.encoder,
         vit_encoder_num_layers=args.vit_encoder_num_layers,
@@ -895,6 +921,7 @@ def build_model(args):
         lite_refpoint_refine=args.lite_refpoint_refine,
         bbox_reparam=args.bbox_reparam,
         channel_adapter=channel_adapter,
+        post_adapter_normalization=post_adapter_norm,
     )
     return model
 

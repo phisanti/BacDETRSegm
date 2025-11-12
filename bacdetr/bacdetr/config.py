@@ -69,6 +69,10 @@ class ModelConfig(BaseModel):
     in_chans: int = 3  # Input channels (1 for grayscale, 3 for RGB)
     channel_adapter: Optional[ChannelAdapterConfig] = None
 
+    # Post-adapter normalization control
+    post_adapter_normalization: bool = True  # Apply normalization after adapter
+    normalization_stats: Literal['dinov2', 'imagenet', 'none'] = 'dinov2'
+
 
 class RFDETRBaseConfig(ModelConfig):
     """
