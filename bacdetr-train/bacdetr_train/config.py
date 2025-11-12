@@ -8,8 +8,14 @@
 # ------------------------------------------------------------------------
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
+
+
+class PreprocessingConfig(BaseModel):
+    skip_input_normalization: bool = False
+    channel_padding: Literal["none", "rgb"] = "none"
+
 
 class TrainConfig(BaseModel):
     lr: float = 1e-4
@@ -50,6 +56,7 @@ class TrainConfig(BaseModel):
     class_names: List[str] = None
     run_test: bool = True
     segmentation_head: bool = False
+    preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
 
 
 class SegmentationTrainConfig(TrainConfig):

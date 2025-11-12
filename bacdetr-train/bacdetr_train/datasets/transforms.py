@@ -461,6 +461,34 @@ class Normalize(object):
         return image, target
 
 
+class PadChannels(object):
+    """
+    Pad channel dimension to the desired count (default 3 for RGB).
+
+    Currently supports mode 'rgb' which repeats channels to reach 3.
+    """
+    def __init__(self, mode="none", num_channels=3):
+        self.mode = mode
+        self.num_channels = num_channels
+
+    def __call__(self, image, target=None):
+        if self.mode == "none" or not torch.is_tensor(image):
+            return image, target
+
+        if image.shape[0] >= self.num_channels:
+            return image, target
+
+        if self.mode == "rgb":
+            if image.shape[0] == 1:
+                image = image.repeat(self.num_channels, 1, 1)
+            else:
+                pad_channels = self.num_channels - image.shape[0]
+                padding = image[-1:].repeat(pad_channels, 1, 1)
+                image = torch.cat([image, padding], dim=0)
+
+        return image, target
+
+
 class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms

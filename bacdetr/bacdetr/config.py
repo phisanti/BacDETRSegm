@@ -8,7 +8,7 @@
 # ------------------------------------------------------------------------
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Literal, Type, Union
 import torch
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
@@ -70,8 +70,16 @@ class ModelConfig(BaseModel):
     channel_adapter: Optional[ChannelAdapterConfig] = None
 
     # Post-adapter normalization control
-    post_adapter_normalization: bool = True  # Apply normalization after adapter
+    normalize_after_adapter: bool = True  # Apply normalization after adapter
     normalization_stats: Literal['dinov2', 'imagenet', 'none'] = 'dinov2'
+
+    @model_validator(mode="before")
+    def _sync_post_adapter_alias(cls, values):
+        """Support legacy `post_adapter_normalization` configs."""
+        legacy_key = 'post_adapter_normalization'
+        if 'normalize_after_adapter' not in values and legacy_key in values:
+            values['normalize_after_adapter'] = values[legacy_key]
+        return values
 
 
 class RFDETRBaseConfig(ModelConfig):

@@ -36,6 +36,11 @@ from bacdetr.models.matcher import build_matcher
 from bacdetr.models.transformer import build_transformer
 from bacdetr.models.segmentation_head import SegmentationHead, get_uncertain_point_coords_with_randomness, point_sample
 
+NORMALIZATION_STATS = {
+    "dinov2": ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    "imagenet": ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+}
+
 class LWDETR(nn.Module):
     """ This is the Group DETR v3 module that performs object detection """
     def __init__(self,
@@ -864,16 +869,18 @@ def build_model(args):
     post_adapter_norm = None
     if channel_adapter is not None:
         # Check if post-adapter normalization is enabled
-        normalize_after = getattr(args, 'post_adapter_normalization', True)
-        if normalize_after:
+        normalize_after = getattr(args, 'normalize_after_adapter', None)
+        if normalize_after is None:
+            normalize_after = getattr(args, 'post_adapter_normalization', True)
+        stats_choice = getattr(args, 'normalization_stats', 'dinov2') or 'dinov2'
+        stats_choice = stats_choice.lower()
+        if normalize_after and stats_choice != 'none':
             from bacdetr.models.channel_adapter.normalization import ImageNormalization
 
-            # Use DinoV2 statistics (ImageNet means/stds)
-            mean = [0.485, 0.456, 0.406]
-            std = [0.229, 0.224, 0.225]
+            mean, std = NORMALIZATION_STATS.get(stats_choice, NORMALIZATION_STATS["imagenet"])
 
             post_adapter_norm = ImageNormalization(mean=mean, std=std)
-            print(f"Built post-adapter normalization: mean={mean}, std={std}")
+            print(f"Built post-adapter normalization ({stats_choice})")
 
     backbone = build_backbone(
         encoder=args.encoder,

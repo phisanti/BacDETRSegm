@@ -63,6 +63,37 @@ def convert_coco_poly_to_mask(segmentations, height, width):
     return torch.stack(masks, dim=0)
 
 
+def _build_normalize_transform(skip_norm: bool, in_chans: int, channel_padding: str):
+    """
+    Build the tensor conversion + normalization pipeline.
+
+    Args:
+        skip_norm: Whether to skip normalization entirely.
+        in_chans: Number of input channels prior to padding.
+        channel_padding: Strategy ('none' or 'rgb') to reach backbone channel count.
+    """
+    transforms = [T.ToTensor()]
+    padding_mode = (channel_padding or "none").lower()
+    channels_for_norm = in_chans
+
+    if padding_mode != "none":
+        transforms.append(T.PadChannels(mode=padding_mode, num_channels=3))
+        channels_for_norm = 3
+
+    if skip_norm:
+        return T.Compose(transforms)
+
+    if channels_for_norm == 1:
+        mean = [0.485]
+        std = [0.229]
+    else:
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+
+    transforms.append(T.Normalize(mean, std))
+    return T.Compose(transforms)
+
+
 class CocoDetection(torchvision.datasets.CocoDetection):
     def __init__(self, img_folder, ann_file, transforms, include_masks=False):
         super(CocoDetection, self).__init__(img_folder, ann_file)
@@ -140,24 +171,24 @@ class ConvertCoco(object):
         return image, target
 
 
-def make_coco_transforms(image_set, resolution, multi_scale=False, expanded_scales=False, skip_random_resize=False, patch_size=16, num_windows=4, skip_input_normalization=False, in_chans=3):
+def make_coco_transforms(
+    image_set,
+    resolution,
+    multi_scale=False,
+    expanded_scales=False,
+    skip_random_resize=False,
+    patch_size=16,
+    num_windows=4,
+    skip_input_normalization=False,
+    in_chans=3,
+    channel_padding="none",
+):
 
-    # Check if we should skip input normalization (when using adapters)
-    if skip_input_normalization:
-        # Only ToTensor, no normalization (adapter will handle it)
-        normalize = T.Compose([T.ToTensor()])
-    else:
-        # Standard normalization for non-adapter models
-        if in_chans == 1:
-            normalize = T.Compose([
-                T.ToTensor(),
-                T.Normalize([0.485], [0.229])
-            ])
-        else:
-            normalize = T.Compose([
-                T.ToTensor(),
-                T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ])
+    normalize = _build_normalize_transform(
+        skip_input_normalization,
+        in_chans=in_chans,
+        channel_padding=channel_padding,
+    )
 
     scales = [resolution]
     if multi_scale:
@@ -195,27 +226,26 @@ def make_coco_transforms(image_set, resolution, multi_scale=False, expanded_scal
     raise ValueError(f'unknown {image_set}')
 
 
-def make_coco_transforms_square_div_64(image_set, resolution, multi_scale=False, expanded_scales=False, skip_random_resize=False, patch_size=16, num_windows=4, skip_input_normalization=False, in_chans=3):
+def make_coco_transforms_square_div_64(
+    image_set,
+    resolution,
+    multi_scale=False,
+    expanded_scales=False,
+    skip_random_resize=False,
+    patch_size=16,
+    num_windows=4,
+    skip_input_normalization=False,
+    in_chans=3,
+    channel_padding="none",
+):
     """
     """
 
-    # Check if we should skip input normalization (when using adapters)
-    if skip_input_normalization:
-        # Only ToTensor, no normalization (adapter will handle it)
-        normalize = T.Compose([T.ToTensor()])
-    else:
-        # Standard normalization for non-adapter models
-        if in_chans == 1:
-            normalize = T.Compose([
-                T.ToTensor(),
-                T.Normalize([0.485], [0.229])
-            ])
-        else:
-            normalize = T.Compose([
-                T.ToTensor(),
-                T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ])
-
+    normalize = _build_normalize_transform(
+        skip_input_normalization,
+        in_chans=in_chans,
+        channel_padding=channel_padding,
+    )
 
     scales = [resolution]
     if multi_scale:
@@ -279,15 +309,30 @@ def build(image_set, args, resolution):
     except:
         square_resize_div_64 = False
 
-    # Check if we should skip input normalization (when using channel adapters)
-    # If a channel adapter is enabled, we skip normalization in the dataset
-    # because it will be applied after the adapter in the model
-    skip_norm = False
+    # Decide on normalization + channel padding based on preprocessing config
+    preprocessing_cfg = getattr(args, 'preprocessing', None)
+    manual_skip = None
+    channel_padding = "none"
+    if preprocessing_cfg is not None:
+        if isinstance(preprocessing_cfg, dict):
+            manual_skip = preprocessing_cfg.get('skip_input_normalization')
+            channel_padding = preprocessing_cfg.get('channel_padding', channel_padding)
+        else:
+            manual_skip = getattr(preprocessing_cfg, 'skip_input_normalization', manual_skip)
+            channel_padding = getattr(preprocessing_cfg, 'channel_padding', channel_padding)
+    channel_padding = (channel_padding or "none").lower()
+    if channel_padding not in {"none", "rgb"}:
+        channel_padding = "none"
+
+    # Automatic skip when channel adapter handles normalization
+    auto_skip = False
     if hasattr(args, 'channel_adapter') and args.channel_adapter is not None:
         if isinstance(args.channel_adapter, dict):
-            skip_norm = args.channel_adapter.get('enabled', False)
+            auto_skip = args.channel_adapter.get('enabled', False)
         else:
-            skip_norm = getattr(args.channel_adapter, 'enabled', False)
+            auto_skip = getattr(args.channel_adapter, 'enabled', False)
+
+    skip_norm = auto_skip if manual_skip is None else manual_skip
 
     # Get number of input channels
     in_chans = getattr(args, 'in_chans', 3)
@@ -302,7 +347,8 @@ def build(image_set, args, resolution):
             patch_size=args.patch_size,
             num_windows=args.num_windows,
             skip_input_normalization=skip_norm,
-            in_chans=in_chans
+            in_chans=in_chans,
+            channel_padding=channel_padding,
         ), include_masks=args.segmentation_head)
     else:
         dataset = CocoDetection(img_folder, ann_file, transforms=make_coco_transforms(
@@ -314,7 +360,7 @@ def build(image_set, args, resolution):
             patch_size=args.patch_size,
             num_windows=args.num_windows,
             skip_input_normalization=skip_norm,
-            in_chans=in_chans
+            in_chans=in_chans,
+            channel_padding=channel_padding,
         ), include_masks=args.segmentation_head)
     return dataset
-
