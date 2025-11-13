@@ -46,14 +46,21 @@ class TrainableRFDETR(RFDETR):
         return self.train_from_config(config, **kwargs)
 
     def train_from_config(self, config, **kwargs):
-        if config.dataset_file == "coco":
-            class_names = COCO_CLASSES
-            num_classes = 90
+        # Extract class names from dataset annotations instead of hardcoding
+        # This allows the model to work with any COCO-format dataset, not just COCO 2017
+        class_names = kwargs.get("class_names", None)
+        num_classes = kwargs.get("num_classes", None)
+        
+        # If num_classes not provided, use model config value
+        if num_classes is None and hasattr(self, 'model_config'):
+            num_classes = getattr(self.model_config, 'num_classes', None)
+        
+        # Set class_names on model if provided
+        if class_names is not None:
             self.model.class_names = class_names
-        else:
-            raise ValueError(f"Invalid dataset file: {config.dataset_file}")
-
-        if self.model_config.num_classes != num_classes:
+            
+        # Reinitialize detection head if num_classes changed
+        if num_classes is not None and hasattr(self, 'model_config') and self.model_config.num_classes != num_classes:
             self.model.reinitialize_detection_head(num_classes)
 
         train_config = config.model_dump()
@@ -61,7 +68,7 @@ class TrainableRFDETR(RFDETR):
         model_config.pop("num_classes", None)
         model_config.pop("class_names", None)
 
-        if train_config.get("class_names") is None:
+        if train_config.get("class_names") is None and class_names is not None:
             train_config["class_names"] = class_names
 
         for k in list(train_config.keys()):
@@ -72,7 +79,10 @@ class TrainableRFDETR(RFDETR):
             if k in model_config:
                 model_config.pop(k)
 
-        all_kwargs = {**model_config, **train_config, **kwargs, "num_classes": num_classes}
+        # Build all_kwargs, only include num_classes if it's not None
+        all_kwargs = {**model_config, **train_config, **kwargs}
+        if num_classes is not None:
+            all_kwargs["num_classes"] = num_classes
 
         metrics_plot_sink = MetricsPlotSink(output_dir=config.output_dir)
         self.callbacks["on_fit_epoch_end"].append(metrics_plot_sink.update)

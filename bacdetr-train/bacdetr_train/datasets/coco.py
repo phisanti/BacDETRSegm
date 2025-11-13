@@ -289,14 +289,21 @@ def make_coco_transforms_square_div_64(
 
     raise ValueError(f'unknown {image_set}')
 
-def build(image_set, args, resolution):
-    root = Path(args.coco_path)
-    assert root.exists(), f'provided COCO path {root} does not exist'
-    mode = 'instances'
+
+def build_coco(image_set, args, resolution, root):
+    """Build COCO dataset with annotations in separate annotations/ folder.
+    
+    Expected structure:
+    - root/train/ (or val/, test/)
+    - root/annotations/_annotations.coco.json (or instances_train.json, etc.)
+    """
+    # Support both 'valid' and 'val' directory names
+    val_dir_name = "valid" if (root / "valid").exists() else "val"
+    
     PATHS = {
-        "train": (root / "train2017", root / "annotations" / f'{mode}_train2017.json'),
-        "val": (root /  "val2017", root / "annotations" / f'{mode}_val2017.json'),
-        "test": (root / "test2017", root / "annotations" / f'image_info_test-dev2017.json'),
+        "train": (root / "train", root / "annotations" / "_annotations.coco.json"),
+        "val": (root / val_dir_name, root / "annotations" / "_annotations.coco.json"),
+        "test": (root / "test", root / "annotations" / "_annotations.coco.json"),
     }
     
     img_folder, ann_file = PATHS[image_set.split("_")[0]]
@@ -368,17 +375,14 @@ def build(image_set, args, resolution):
     return dataset
 
 
-def build_roboflow(image_set, args, resolution):
-    """Build dataset for Roboflow-format COCO datasets.
-
-    Roboflow datasets follow a specific structure:
-    - dataset_dir/train/_annotations.coco.json
-    - dataset_dir/valid/_annotations.coco.json (or val/)
-    - dataset_dir/test/_annotations.coco.json
+def build_roboflow(image_set, args, resolution, root):
+    """Build COCO dataset with Roboflow-style inline annotations.
+    
+    Expected structure:
+    - root/train/_annotations.coco.json
+    - root/valid/_annotations.coco.json (or val/)
+    - root/test/_annotations.coco.json
     """
-    root = Path(args.dataset_dir)
-    assert root.exists(), f'provided Roboflow path {root} does not exist'
-
     # Support both 'valid' (Roboflow standard) and 'val' (COCO standard)
     val_dir = root / "valid" if (root / "valid").exists() else root / "val"
 
@@ -443,3 +447,51 @@ def build_roboflow(image_set, args, resolution):
             channel_padding=channel_padding,
         ), include_masks=include_masks)
     return dataset
+
+
+def build(image_set, args, resolution):
+    """Smart COCO dataset loader with auto-detection of annotation structure.
+    
+    Automatically detects and loads datasets with COCO-format annotations from either:
+    - Roboflow structure: train/_annotations.coco.json, val/_annotations.coco.json
+    - Standard structure: train2017/, annotations/instances_train2017.json
+    
+    Args:
+        image_set: 'train', 'val', or 'test'
+        args: Configuration with either 'dataset_dir' or 'coco_path' parameter
+        resolution: Input image resolution
+        
+    Returns:
+        CocoDetection dataset instance
+        
+    Raises:
+        ValueError: If neither dataset_dir nor coco_path is provided
+        AssertionError: If dataset path doesn't exist or structure is unrecognized
+    """
+    # Parameter priority: dataset_dir > coco_path (for backward compatibility)
+    dataset_path = getattr(args, 'dataset_dir', None) or getattr(args, 'coco_path', None)
+    if dataset_path is None:
+        raise ValueError(
+            "Either 'dataset_dir' or 'coco_path' must be provided in configuration"
+        )
+    
+    root = Path(dataset_path)
+    assert root.exists(), f'Dataset path does not exist: {root}'
+    
+    # Auto-detect structure by checking for characteristic files/directories
+    roboflow_indicator = root / "train" / "_annotations.coco.json"
+    standard_indicator = root / "train2017"
+    
+    if roboflow_indicator.exists():
+        # Roboflow-style structure detected
+        return build_roboflow(image_set, args, resolution, root)
+    elif standard_indicator.exists():
+        # Standard COCO structure detected
+        return build_coco(image_set, args, resolution, root)
+    else:
+        raise ValueError(
+            f"Could not detect COCO dataset structure in {root}.\n"
+            f"Expected either:\n"
+            f"  - Roboflow: train/_annotations.coco.json, val/_annotations.coco.json\n"
+            f"  - Standard: train2017/, annotations/instances_train2017.json"
+        )
