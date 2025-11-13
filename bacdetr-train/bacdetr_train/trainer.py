@@ -162,7 +162,7 @@ class Model:
                     f"Currently supported callbacks: {currently_supported_callbacks}"
                 )
         args = populate_args(**kwargs)
-        if getattr(args, 'class_names') is not None:
+        if getattr(args, 'class_names', None) is not None:
             self.args.class_names = args.class_names
             self.args.num_classes = args.num_classes
 
@@ -198,9 +198,10 @@ class Model:
                                     weight_decay=args.weight_decay)
         # Choose the learning rate scheduler based on the new argument
 
-        dataset_train = build_dataset(image_set='train', args=args, resolution=args.resolution)
-        dataset_val = build_dataset(image_set='val', args=args, resolution=args.resolution)
-        dataset_test = build_dataset(image_set='val', args=args, resolution=args.resolution)
+        # Use self.args.resolution (from model config) not args.resolution (from train kwargs)
+        dataset_train = build_dataset(image_set='train', args=args, resolution=self.args.resolution)
+        dataset_val = build_dataset(image_set='val', args=args, resolution=self.args.resolution)
+        dataset_test = build_dataset(image_set='val', args=args, resolution=self.args.resolution)
 
         # for cosine annealing, calculate total training steps and warmup steps
         total_batch_size_for_lr = args.batch_size * utils.get_world_size() * args.grad_accum_steps
@@ -326,7 +327,8 @@ class Model:
             print("Min DP = %.7f, Max DP = %.7f" % (min(schedules['dp']), max(schedules['dp'])))
         print("Start training")
         start_time = time.time()
-        best_map_holder = BestMetricHolder(use_ema=args.use_ema)
+        # Initialize with -1.0 so that even 0.0 mAP counts as improvement (handles untrained models)
+        best_map_holder = BestMetricHolder(init_res=-1.0, use_ema=args.use_ema)
         best_map_5095 = 0
         best_map_50 = 0
         best_map_ema_5095 = 0
@@ -467,30 +469,39 @@ class Model:
                 break
 
         best_is_ema = best_map_ema_5095 > best_map_5095
-        
+
         if utils.is_main_process():
-            if best_is_ema:
-                shutil.copy2(output_dir / 'checkpoint_best_ema.pth', output_dir / 'checkpoint_best_total.pth')
-            else:
-                shutil.copy2(output_dir / 'checkpoint_best_regular.pth', output_dir / 'checkpoint_best_total.pth')
-            
-            utils.strip_checkpoint(output_dir / 'checkpoint_best_total.pth')
-        
-            best_map_5095 = max(best_map_5095, best_map_ema_5095)
-            if best_is_ema:
-                results = ema_test_stats["results_json"]
-            else:
-                results = test_stats["results_json"]
+            # Defensive checkpoint copying - only copy if source checkpoint exists
+            ema_ckpt = output_dir / 'checkpoint_best_ema.pth'
+            regular_ckpt = output_dir / 'checkpoint_best_regular.pth'
+            target_ckpt = output_dir / 'checkpoint_best_total.pth'
+            source_ckpt = ema_ckpt if best_is_ema else regular_ckpt
 
-            class_map = results["class_map"]
-            results["class_map"] = {"valid": class_map}
-            with open(output_dir / "results.json", "w") as f:
-                json.dump(results, f)
+            if source_ckpt.exists():
+                shutil.copy2(source_ckpt, target_ckpt)
+                utils.strip_checkpoint(target_ckpt)
+            else:
+                print(f"[WARNING] Expected checkpoint {source_ckpt} not found; skipping best checkpoint export.")
 
-            total_time = time.time() - start_time
-            total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-            print('Training time {}'.format(total_time_str))
-            print('Results saved to {}'.format(output_dir / "results.json"))
+            # Only export metrics if we successfully created the best checkpoint
+            if target_ckpt.exists():
+                best_map_5095 = max(best_map_5095, best_map_ema_5095)
+                if best_is_ema:
+                    results = ema_test_stats["results_json"]
+                else:
+                    results = test_stats["results_json"]
+
+                class_map = results["class_map"]
+                results["class_map"] = {"valid": class_map}
+                with open(output_dir / "results.json", "w") as f:
+                    json.dump(results, f)
+
+                total_time = time.time() - start_time
+                total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+                print('Training time {}'.format(total_time_str))
+                print('Results saved to {}'.format(output_dir / "results.json"))
+            else:
+                print(f"[WARNING] Skipping metrics export because {target_ckpt} was not created.")
             
         
         if best_is_ema:
@@ -498,20 +509,24 @@ class Model:
         self.model.eval()
 
         if args.run_test:
-            best_state_dict = torch.load(output_dir / 'checkpoint_best_total.pth', map_location='cpu', weights_only=False)['model']
-            model.load_state_dict(best_state_dict)
-            model.eval()
+            best_ckpt = output_dir / 'checkpoint_best_total.pth'
+            if best_ckpt.exists():
+                best_state_dict = torch.load(best_ckpt, map_location='cpu', weights_only=False)['model']
+                model.load_state_dict(best_state_dict)
+                model.eval()
 
-            test_stats, _ = evaluate(
-                model, criterion, postprocess, data_loader_test, base_ds_test, device, args=args
-            )
-            print(f"Test results: {test_stats}")
-            with open(output_dir / "results.json", "r") as f:
-                results = json.load(f)
-            test_metrics = test_stats["results_json"]["class_map"]
-            results["class_map"]["test"] = test_metrics
-            with open(output_dir / "results.json", "w") as f:
-                json.dump(results, f)
+                test_stats, _ = evaluate(
+                    model, criterion, postprocess, data_loader_test, base_ds_test, device, args=args
+                )
+                print(f"Test results: {test_stats}")
+                with open(output_dir / "results.json", "r") as f:
+                    results = json.load(f)
+                test_metrics = test_stats["results_json"]["class_map"]
+                results["class_map"]["test"] = test_metrics
+                with open(output_dir / "results.json", "w") as f:
+                    json.dump(results, f)
+            else:
+                print(f"[WARNING] Skipping final test evaluation because {best_ckpt} is missing.")
 
         for callback in callbacks["on_train_end"]:
             callback()
@@ -950,6 +965,7 @@ def populate_args(
     resume='',
     start_epoch=0,
     eval=False,
+    run_test=False,
     use_ema=False,
     ema_decay=0.9997,
     ema_tau=0,
@@ -981,6 +997,16 @@ def populate_args(
     early_stopping_min_delta=0.001,
     early_stopping_use_ema=False,
     gradient_checkpointing=False,
+    # Segmentation parameters
+    segmentation_head=False,
+    mask_downsample_ratio=4,
+    mask_ce_loss_coef=5.0,
+    mask_dice_loss_coef=5.0,
+    mask_point_sample_ratio=16,
+    # Model architecture parameters (from Pydantic configs)
+    patch_size=14,
+    num_windows=4,
+    positional_encoding_size=37,
     # Additional
     subcommand=None,
     **extra_kwargs  # To handle any unexpected arguments
@@ -1057,6 +1083,7 @@ def populate_args(
         resume=resume,
         start_epoch=start_epoch,
         eval=eval,
+        run_test=run_test,
         use_ema=use_ema,
         ema_decay=ema_decay,
         ema_tau=ema_tau,
@@ -1081,6 +1108,14 @@ def populate_args(
         early_stopping_min_delta=early_stopping_min_delta,
         early_stopping_use_ema=early_stopping_use_ema,
         gradient_checkpointing=gradient_checkpointing,
+        segmentation_head=segmentation_head,
+        mask_downsample_ratio=mask_downsample_ratio,
+        mask_ce_loss_coef=mask_ce_loss_coef,
+        mask_dice_loss_coef=mask_dice_loss_coef,
+        mask_point_sample_ratio=mask_point_sample_ratio,
+        patch_size=patch_size,
+        num_windows=num_windows,
+        positional_encoding_size=positional_encoding_size,
         **extra_kwargs
     )
     return args

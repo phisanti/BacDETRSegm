@@ -366,3 +366,80 @@ def build(image_set, args, resolution):
             channel_padding=channel_padding,
         ), include_masks=args.segmentation_head)
     return dataset
+
+
+def build_roboflow(image_set, args, resolution):
+    """Build dataset for Roboflow-format COCO datasets.
+
+    Roboflow datasets follow a specific structure:
+    - dataset_dir/train/_annotations.coco.json
+    - dataset_dir/valid/_annotations.coco.json (or val/)
+    - dataset_dir/test/_annotations.coco.json
+    """
+    root = Path(args.dataset_dir)
+    assert root.exists(), f'provided Roboflow path {root} does not exist'
+
+    # Support both 'valid' (Roboflow standard) and 'val' (COCO standard)
+    val_dir = root / "valid" if (root / "valid").exists() else root / "val"
+
+    PATHS = {
+        "train": (root / "train", root / "train" / "_annotations.coco.json"),
+        "val": (val_dir, val_dir / "_annotations.coco.json"),
+        "test": (root / "test", root / "test" / "_annotations.coco.json"),
+    }
+
+    img_folder, ann_file = PATHS[image_set.split("_")[0]]
+
+    try:
+        square_resize_div_64 = args.square_resize_div_64
+    except:
+        square_resize_div_64 = False
+
+    try:
+        include_masks = args.segmentation_head
+    except:
+        include_masks = False
+
+    # Get number of input channels
+    in_chans = getattr(args, 'in_chans', 3)
+
+    # Channel padding mode for adapters
+    channel_padding = getattr(args, 'channel_padding', 'replicate')
+
+    # Check if we should skip normalization (for channel adapters)
+    manual_skip = getattr(args, 'skip_input_normalization', None)
+    auto_skip = False
+    if hasattr(args, 'channel_adapter') and args.channel_adapter is not None:
+        if isinstance(args.channel_adapter, dict):
+            auto_skip = args.channel_adapter.get('enabled', False)
+        else:
+            auto_skip = getattr(args.channel_adapter, 'enabled', False)
+    skip_norm = auto_skip if manual_skip is None else manual_skip
+
+    if square_resize_div_64:
+        dataset = CocoDetection(img_folder, ann_file, transforms=make_coco_transforms_square_div_64(
+            image_set,
+            resolution,
+            multi_scale=args.multi_scale,
+            expanded_scales=args.expanded_scales,
+            skip_random_resize=not args.do_random_resize_via_padding,
+            patch_size=args.patch_size,
+            num_windows=args.num_windows,
+            skip_input_normalization=skip_norm,
+            in_chans=in_chans,
+            channel_padding=channel_padding,
+        ), include_masks=include_masks)
+    else:
+        dataset = CocoDetection(img_folder, ann_file, transforms=make_coco_transforms(
+            image_set,
+            resolution,
+            multi_scale=args.multi_scale,
+            expanded_scales=args.expanded_scales,
+            skip_random_resize=not args.do_random_resize_via_padding,
+            patch_size=args.patch_size,
+            num_windows=args.num_windows,
+            skip_input_normalization=skip_norm,
+            in_chans=in_chans,
+            channel_padding=channel_padding,
+        ), include_masks=include_masks)
+    return dataset

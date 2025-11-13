@@ -5,12 +5,11 @@
 # ------------------------------------------------------------------------
 
 
-import json
 import os
-from collections import defaultdict
 from logging import getLogger
-from typing import Union, List
+from typing import List, Union
 from copy import deepcopy
+from abc import ABC, abstractmethod
 
 import numpy as np
 import supervision as sv
@@ -24,21 +23,31 @@ except:
     pass
 
 from bacdetr.config import (
+    ModelConfig,
     RFDETRBaseConfig,
     RFDETRLargeConfig,
-    RFDETRNanoConfig,
-    RFDETRSmallConfig,
     RFDETRMediumConfig,
+    RFDETRNanoConfig,
     RFDETRSegPreviewConfig,
-    ModelConfig
+    RFDETRSmallConfig,
 )
-# TODO: These imports are training-specific and will be refactored
-# from bacdetr_train.trainer import Model, download_pretrain_weights
-# from bacdetr_train.util.metrics import MetricsPlotSink, MetricsTensorBoardSink, MetricsWandBSink
+from bacdetr.util.files import download_file
 from bacdetr.util.coco_classes import COCO_CLASSES
 
 logger = getLogger(__name__)
-class RFDETR:
+
+HOSTED_MODELS = {
+    "rf-detr-base.pth": "https://storage.googleapis.com/rfdetr/rf-detr-base-coco.pth",
+    "rf-detr-base-o365.pth": "https://storage.googleapis.com/rfdetr/top-secret-1234/lwdetr_dinov2_small_o365_checkpoint.pth",
+    "rf-detr-base-2.pth": "https://storage.googleapis.com/rfdetr/rf-detr-base-2.pth",
+    "rf-detr-large.pth": "https://storage.googleapis.com/rfdetr/rf-detr-large.pth",
+    "rf-detr-nano.pth": "https://storage.googleapis.com/rfdetr/nano_coco/checkpoint_best_regular.pth",
+    "rf-detr-small.pth": "https://storage.googleapis.com/rfdetr/small_coco/checkpoint_best_regular.pth",
+    "rf-detr-medium.pth": "https://storage.googleapis.com/rfdetr/medium_coco/checkpoint_best_regular.pth",
+    "rf-detr-seg-preview.pt": "https://storage.googleapis.com/rfdetr/rf-detr-seg-preview.pt",
+}
+
+class RFDETR(ABC):
     """
     The base RF-DETR class implements the core methods for training RF-DETR models,
     running inference on the models, optimising models, and uploading trained
@@ -52,7 +61,6 @@ class RFDETR:
         self.model_config = self.get_model_config(**kwargs)
         self.maybe_download_pretrain_weights()
         self.model = self.get_model(self.model_config)
-        self.callbacks = defaultdict(list)
 
         self.model.inference_model = None
         self._is_optimized_for_inference = False
@@ -66,7 +74,9 @@ class RFDETR:
         """
         Download pre-trained weights if they are not already downloaded.
         """
-        download_pretrain_weights(self.model_config.pretrain_weights)
+        weights = self.model_config.pretrain_weights
+        if weights in HOSTED_MODELS and not os.path.exists(weights):
+            download_file(HOSTED_MODELS[weights], weights)
 
     def get_model_config(self, **kwargs):
         """
@@ -74,12 +84,10 @@ class RFDETR:
         """
         return ModelConfig(**kwargs)
 
+    @abstractmethod
     def train(self, **kwargs):
-        """
-        Train an RF-DETR model.
-        """
-        config = self.get_train_config(**kwargs)
-        self.train_from_config(config, **kwargs)
+        """Train the model (framework-specific)."""
+        raise NotImplementedError
     
     def optimize_for_inference(self, compile=True, batch_size=1, dtype=torch.float32):
         self.remove_optimized_model()
@@ -122,79 +130,28 @@ class RFDETR:
         """
         self.model.export(**kwargs)
 
-    def train_from_config(self, config: TrainConfig, **kwargs):
-        if config.dataset_file == "coco":
-            class_names = COCO_CLASSES
-            num_classes = 90
-        else:
-            raise ValueError(f"Invalid dataset file: {config.dataset_file}")
+    @abstractmethod
+    def train_from_config(self, *args, **kwargs):
+        """Train using a structured configuration."""
+        raise NotImplementedError
 
-        if self.model_config.num_classes != num_classes:
-            self.model.reinitialize_detection_head(num_classes)
-        
-        train_config = config.dict()
-        model_config = self.model_config.dict()
-        model_config.pop("num_classes")
-        if "class_names" in model_config:
-            model_config.pop("class_names")
-        
-        if "class_names" in train_config and train_config["class_names"] is None:
-            train_config["class_names"] = class_names
-
-        for k, v in train_config.items():
-            if k in model_config:
-                model_config.pop(k)
-            if k in kwargs:
-                kwargs.pop(k)
-        
-        all_kwargs = {**model_config, **train_config, **kwargs, "num_classes": num_classes}
-
-        metrics_plot_sink = MetricsPlotSink(output_dir=config.output_dir)
-        self.callbacks["on_fit_epoch_end"].append(metrics_plot_sink.update)
-        self.callbacks["on_train_end"].append(metrics_plot_sink.save)
-
-        if config.tensorboard:
-            metrics_tensor_board_sink = MetricsTensorBoardSink(output_dir=config.output_dir)
-            self.callbacks["on_fit_epoch_end"].append(metrics_tensor_board_sink.update)
-            self.callbacks["on_train_end"].append(metrics_tensor_board_sink.close)
-
-        if config.wandb:
-            metrics_wandb_sink = MetricsWandBSink(
-                output_dir=config.output_dir,
-                project=config.project,
-                run=config.run,
-                config=config.model_dump()
-            )
-            self.callbacks["on_fit_epoch_end"].append(metrics_wandb_sink.update)
-            self.callbacks["on_train_end"].append(metrics_wandb_sink.close)
-
-        if config.early_stopping:
-            from bacdetr.util.early_stopping import EarlyStoppingCallback
-            early_stopping_callback = EarlyStoppingCallback(
-                model=self.model,
-                patience=config.early_stopping_patience,
-                min_delta=config.early_stopping_min_delta,
-                use_ema=config.early_stopping_use_ema,
-                segmentation_head=config.segmentation_head
-            )
-            self.callbacks["on_fit_epoch_end"].append(early_stopping_callback.update)
-
-        self.model.train(
-            **all_kwargs,
-            callbacks=self.callbacks,
-        )
-
+    @abstractmethod
     def get_train_config(self, **kwargs):
-        """
-        Retrieve the configuration parameters that will be used for training.
-        """
-        return TrainConfig(**kwargs)
+        """Return the structured training config."""
+        raise NotImplementedError
 
     def get_model(self, config: ModelConfig):
         """
         Retrieve a model instance based on the provided configuration.
         """
-        return Model(**config.dict())
+        try:
+            from bacdetr_train.trainer import Model as TrainerModel  # type: ignore
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "bacdetr_train is required to instantiate RF-DETR models. "
+                "Install bacdetr-train or override get_model in your subclass."
+            ) from exc
+        return TrainerModel(**config.dict())
     
     # Get class_names from the model
     @property
@@ -351,64 +308,72 @@ class RFDETR:
 
 
 class RFDETRBase(RFDETR):
-    """
-    Train an RF-DETR Base model (29M parameters).
-    """
+    """RF-DETR Base (29M parameters)."""
+
     size = "rfdetr-base"
+
     def get_model_config(self, **kwargs):
         return RFDETRBaseConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
-        return TrainConfig(**kwargs)
+        raise NotImplementedError
+
 
 class RFDETRLarge(RFDETR):
-    """
-    Train an RF-DETR Large model.
-    """
+    """RF-DETR Large."""
+
     size = "rfdetr-large"
+
     def get_model_config(self, **kwargs):
         return RFDETRLargeConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
-        return TrainConfig(**kwargs)
+        raise NotImplementedError
+
 
 class RFDETRNano(RFDETR):
-    """
-    Train an RF-DETR Nano model.
-    """
+    """RF-DETR Nano."""
+
     size = "rfdetr-nano"
+
     def get_model_config(self, **kwargs):
         return RFDETRNanoConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
-        return TrainConfig(**kwargs)
+        raise NotImplementedError
+
 
 class RFDETRSmall(RFDETR):
-    """
-    Train an RF-DETR Small model.
-    """
+    """RF-DETR Small."""
+
     size = "rfdetr-small"
+
     def get_model_config(self, **kwargs):
         return RFDETRSmallConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
-        return TrainConfig(**kwargs)
+        raise NotImplementedError
+
 
 class RFDETRMedium(RFDETR):
-    """
-    Train an RF-DETR Medium model.
-    """
+    """RF-DETR Medium."""
+
     size = "rfdetr-medium"
+
     def get_model_config(self, **kwargs):
         return RFDETRMediumConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
-        return TrainConfig(**kwargs)
+        raise NotImplementedError
+
 
 class RFDETRSegPreview(RFDETR):
+    """RF-DETR Segmentation Preview variant."""
+
     size = "rfdetr-seg-preview"
+
     def get_model_config(self, **kwargs):
         return RFDETRSegPreviewConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
-        return SegmentationTrainConfig(**kwargs)
+        raise NotImplementedError
