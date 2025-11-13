@@ -15,6 +15,7 @@ from typing import List, Optional, Literal
 class PreprocessingConfig(BaseModel):
     skip_input_normalization: bool = False
     channel_padding: Literal["none", "rgb"] = "none"
+    read_n_channels: Optional[int] = None
 
 
 class TrainConfig(BaseModel):

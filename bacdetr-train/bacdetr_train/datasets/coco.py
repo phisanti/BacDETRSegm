@@ -19,6 +19,7 @@ COCO dataset which returns image_id for evaluation.
 Mostly copy-paste from https://github.com/pytorch/vision/blob/13b35ff/references/detection/coco_utils.py
 """
 from pathlib import Path
+from typing import Optional
 
 import torch
 import torch.utils.data
@@ -94,15 +95,44 @@ def _build_normalize_transform(skip_norm: bool, in_chans: int, channel_padding: 
     return T.Compose(transforms)
 
 
+def _get_read_n_channels(args) -> Optional[int]:
+    """Determine how many channels to load directly from disk."""
+    preprocessing_cfg = getattr(args, 'preprocessing', None)
+    read_n = None
+    if preprocessing_cfg is not None:
+        if isinstance(preprocessing_cfg, dict):
+            read_n = preprocessing_cfg.get('read_n_channels')
+        else:
+            read_n = getattr(preprocessing_cfg, 'read_n_channels', None)
+
+    return read_n
+
+
 class CocoDetection(torchvision.datasets.CocoDetection):
-    def __init__(self, img_folder, ann_file, transforms, include_masks=False):
+    def __init__(self, img_folder, ann_file, transforms, include_masks=False, read_n_channels: Optional[int] = None):
         super(CocoDetection, self).__init__(img_folder, ann_file)
         self._transforms = transforms
         self.include_masks = include_masks
+        self.read_n_channels = read_n_channels
         self.prepare = ConvertCoco(include_masks=include_masks)
+
+    def _maybe_trim_channels(self, img):
+        if not self.read_n_channels:
+            return img
+
+        if self.read_n_channels == 1:
+            if img.mode == 'L':
+                return img
+            bands = img.split()
+            if len(bands) >= 1:
+                return bands[0]
+            return img.convert('L')
+
+        return img
 
     def __getitem__(self, idx):
         img, target = super(CocoDetection, self).__getitem__(idx)
+        img = self._maybe_trim_channels(img)
         image_id = self.ids[idx]
         target = {'image_id': image_id, 'annotations': target}
         img, target = self.prepare(img, target)
@@ -346,6 +376,8 @@ def build_coco(image_set, args, resolution, root):
     # Get number of input channels
     in_chans = getattr(args, 'in_chans', 3)
 
+    read_n_channels = _get_read_n_channels(args)
+
     if square_resize_div_64:
         dataset = CocoDetection(img_folder, ann_file, transforms=make_coco_transforms_square_div_64(
             image_set,
@@ -358,7 +390,7 @@ def build_coco(image_set, args, resolution, root):
             skip_input_normalization=skip_norm,
             in_chans=in_chans,
             channel_padding=channel_padding,
-        ), include_masks=args.segmentation_head)
+        ), include_masks=args.segmentation_head, read_n_channels=read_n_channels)
     else:
         dataset = CocoDetection(img_folder, ann_file, transforms=make_coco_transforms(
             image_set,
@@ -371,7 +403,7 @@ def build_coco(image_set, args, resolution, root):
             skip_input_normalization=skip_norm,
             in_chans=in_chans,
             channel_padding=channel_padding,
-        ), include_masks=args.segmentation_head)
+        ), include_masks=args.segmentation_head, read_n_channels=read_n_channels)
     return dataset
 
 
@@ -420,6 +452,8 @@ def build_roboflow(image_set, args, resolution, root):
             auto_skip = getattr(args.channel_adapter, 'enabled', False)
     skip_norm = auto_skip if manual_skip is None else manual_skip
 
+    read_n_channels = _get_read_n_channels(args)
+
     if square_resize_div_64:
         dataset = CocoDetection(img_folder, ann_file, transforms=make_coco_transforms_square_div_64(
             image_set,
@@ -432,7 +466,7 @@ def build_roboflow(image_set, args, resolution, root):
             skip_input_normalization=skip_norm,
             in_chans=in_chans,
             channel_padding=channel_padding,
-        ), include_masks=include_masks)
+        ), include_masks=include_masks, read_n_channels=read_n_channels)
     else:
         dataset = CocoDetection(img_folder, ann_file, transforms=make_coco_transforms(
             image_set,
@@ -445,7 +479,7 @@ def build_roboflow(image_set, args, resolution, root):
             skip_input_normalization=skip_norm,
             in_chans=in_chans,
             channel_padding=channel_padding,
-        ), include_masks=include_masks)
+        ), include_masks=include_masks, read_n_channels=read_n_channels)
     return dataset
 
 
