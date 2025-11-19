@@ -68,8 +68,9 @@ class GradientChannelAdapter(nn.Module):
     Gradient-based channel adapter using pre-trained gradient flow prediction networks.
 
     This adapter loads pre-trained GradientConvNext/UNext models that have been trained
-    to predict gradient flows from grayscale images. These gradient representations are
-    used as pseudo-RGB input for the backbone.
+    to predict gradient flows from grayscale images. The adapter outputs 3 channels:
+    [source, dx, dy] where source is the original grayscale image and dx, dy are the
+    predicted gradients. These are used as pseudo-RGB input for the backbone.
 
     Args:
         model_name: Name of the pre-trained model (e.g., "gradconvnext_atto", "gradconvunext_femto")
@@ -77,6 +78,12 @@ class GradientChannelAdapter(nn.Module):
         target_resolution: Optional target resolution for upsampling (e.g., 312, 384, 432)
         freeze: Whether to freeze the model after loading (default: False)
         apply_scaling: Whether to apply linear scaling to gradients from [-1,1] to [0,1] (default: True)
+
+    Output:
+        3 channels: [source, dx, dy]
+        - Channel 0: Original grayscale image [0, 1]
+        - Channel 1: Horizontal gradient dx (scaled to [0, 1] if apply_scaling=True)
+        - Channel 2: Vertical gradient dy (scaled to [0, 1] if apply_scaling=True)
     """
     def __init__(
         self,
@@ -201,25 +208,12 @@ class GradientChannelAdapter(nn.Module):
 
     def _get_out_channels(self) -> int:
         """
-        Infer output channels from the model's last layer.
-        Gradient models typically output 2 channels (dx, dy) or 3 channels (dx, dy, magnitude).
+        Get the adapter's output channels.
+        The adapter always outputs 3 channels: [source, dx, dy]
+        where the gradient model provides 2 channels (dx, dy) and we concatenate
+        with the source image to produce 3 channels.
         """
-        try:
-            # Try to find the last conv layer
-            last_conv = None
-            for module in self.model.modules():
-                if isinstance(module, nn.Conv2d):
-                    last_conv = module
-            if last_conv is not None:
-                out_ch = last_conv.out_channels
-                # If gradient model outputs 2 channels, we need to adapt to 3 for RGB
-                if out_ch == 2:
-                    print(f"Gradient model outputs 2 channels (dx, dy), will replicate to 3 for RGB")
-                    return 2  # Will be handled in forward()
-                return out_ch
-            return 3  # Default fallback
-        except:
-            return 3  # Default fallback
+        return 3
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
