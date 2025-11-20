@@ -69,29 +69,47 @@ def _build_normalize_transform(skip_norm: bool, in_chans: int, channel_padding: 
     Build the tensor conversion + normalization pipeline.
 
     Args:
-        skip_norm: Whether to skip normalization entirely.
+        skip_norm: Whether to skip IMAGE statistical normalization.
+                   Bbox transformation ALWAYS occurs.
         in_chans: Number of input channels prior to padding.
         channel_padding: Strategy ('none' or 'rgb') to reach backbone channel count.
+
+    Returns:
+        Composed transform pipeline.
+
+    Pipeline options:
+        skip_norm=False: [ToTensor, PadChannels?, TransformBboxes, StandardizeImage]
+        skip_norm=True:  [ToTensor, PadChannels?, TransformBboxes]
+
+    Note:
+        Bbox transformation (xyxy→cxcywh, pixel→normalized) ALWAYS happens
+        via TransformBboxes, regardless of skip_norm. This is critical because
+        the model expects normalized cxcywh bboxes even when image normalization
+        is handled elsewhere (e.g., by a channel adapter).
     """
     transforms = [T.ToTensor()]
     padding_mode = (channel_padding or "none").lower()
     channels_for_norm = in_chans
 
+    # Channel padding (if needed)
     if padding_mode != "none":
         transforms.append(T.PadChannels(mode=padding_mode, num_channels=3))
         channels_for_norm = 3
 
-    if skip_norm:
-        return T.Compose(transforms)
+    # ALWAYS transform bboxes (geometric transformation)
+    transforms.append(T.TransformBboxes())
 
-    if channels_for_norm == 1:
-        mean = [0.485]
-        std = [0.229]
-    else:
-        mean = [0.485, 0.456, 0.406]
-        std = [0.229, 0.224, 0.225]
+    # Optionally standardize images (statistical normalization)
+    if not skip_norm:
+        if channels_for_norm == 1:
+            mean = [0.485]
+            std = [0.229]
+        else:
+            mean = [0.485, 0.456, 0.406]
+            std = [0.229, 0.224, 0.225]
 
-    transforms.append(T.Normalize(mean, std))
+        transforms.append(T.StandardizeImage(mean, std))
+
     return T.Compose(transforms)
 
 

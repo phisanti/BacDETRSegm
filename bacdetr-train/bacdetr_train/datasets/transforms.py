@@ -17,6 +17,8 @@
 Transforms and data augmentation for both image + bbox.
 """
 import random
+import warnings
+from typing import Optional, Tuple, Dict, Any
 
 import PIL
 import numpy as np
@@ -469,22 +471,107 @@ class RandomErasing(object):
         return self.eraser(img), target
 
 
-class Normalize(object):
+class TransformBboxes(object):
+    """
+    Transform bounding boxes from absolute pixel coordinates (xyxy)
+    to normalized relative coordinates (cxcywh).
+
+    This is a pure geometric transformation that:
+    1. Converts format: [x1, y1, x2, y2] → [cx, cy, w, h]
+    2. Normalizes scale: [0, img_size] → [0, 1]
+
+    This transform should ALWAYS be applied as the model expects
+    normalized cxcywh coordinates, regardless of image preprocessing.
+
+    Example:
+        >>> transform = TransformBboxes()
+        >>> image = torch.rand(3, 312, 312)
+        >>> target = {"boxes": torch.tensor([[10, 20, 100, 150]])}  # xyxy
+        >>> _, target_out = transform(image, target)
+        >>> print(target_out["boxes"])
+        tensor([[0.1763, 0.2724, 0.2885, 0.4167]])  # cxcywh normalized
+    """
+
+    def __call__(
+        self,
+        image: torch.Tensor,
+        target: Optional[Dict[str, Any]] = None
+    ) -> Tuple[torch.Tensor, Optional[Dict[str, Any]]]:
+        if target is None or "boxes" not in target:
+            return image, target
+
+        target = target.copy()
+        boxes = target["boxes"]
+
+        if len(boxes) == 0:
+            return image, target
+
+        h, w = image.shape[-2:]
+        boxes = box_xyxy_to_cxcywh(boxes)
+        target["boxes"] = boxes / torch.tensor(
+            [w, h, w, h], dtype=boxes.dtype, device=boxes.device
+        )
+
+        return image, target
+
+
+class StandardizeImage(object):
+    """
+    Standardize image tensor to zero-mean, unit-variance.
+
+    Applies per-channel standardization: (x - mean) / std
+    This is a statistical transformation that normalizes pixel
+    value distributions for better training dynamics.
+
+    Does not affect target annotations.
+
+    Args:
+        mean: Per-channel mean values
+        std: Per-channel standard deviation values
+    """
+
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
 
-    def __call__(self, image, target=None):
+    def __call__(
+        self,
+        image: torch.Tensor,
+        target: Optional[Dict[str, Any]] = None
+    ) -> Tuple[torch.Tensor, Optional[Dict[str, Any]]]:
         image = F.normalize(image, mean=self.mean, std=self.std)
-        if target is None:
-            return image, None
-        target = target.copy()
-        h, w = image.shape[-2:]
-        if "boxes" in target:
-            boxes = target["boxes"]
-            boxes = box_xyxy_to_cxcywh(boxes)
-            boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
-            target["boxes"] = boxes
+        return image, target
+
+
+class Normalize(object):
+    """
+    DEPRECATED: Use TransformBboxes + StandardizeImage instead.
+
+    This class couples image standardization with bbox transformation,
+    which makes it impossible to skip image normalization while still
+    transforming bboxes correctly.
+
+    Migration:
+        # Old
+        Normalize(mean, std)
+
+        # New
+        Compose([TransformBboxes(), StandardizeImage(mean, std)])
+    """
+    def __init__(self, mean, std):
+        warnings.warn(
+            "Normalize is deprecated. Use TransformBboxes + StandardizeImage instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self.mean = mean
+        self.std = std
+        self.bbox_transform = TransformBboxes()
+        self.image_standardize = StandardizeImage(mean, std)
+
+    def __call__(self, image, target=None):
+        image, target = self.bbox_transform(image, target)
+        image, target = self.image_standardize(image, target)
         return image, target
 
 
