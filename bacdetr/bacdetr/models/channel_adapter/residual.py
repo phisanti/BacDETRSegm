@@ -69,13 +69,15 @@ class ResidualChannelAdapter(nn.Module):
     """
     Lightweight residual channel adapter for grayscale -> pseudo-RGB conversion.
 
+    This adapter is responsible ONLY for channel interpolation (1 channel -> 3 channels).
+    Image resizing should be handled by the dataloader before the adapter.
+
     Args:
         in_channels: Number of input channels (e.g., 1 for grayscale)
         out_channels: Number of output channels (typically 3 for RGB)
         num_blocks: Number of residual blocks (2-4 typical)
         intermediate_dim: Hidden dimension for processing (32-64 typical)
         drop_path: Stochastic depth rate (0.0-0.2 for regularization)
-        target_resolution: Optional target resolution for upsampling (e.g., 312, 384, 432)
     """
     def __init__(
         self,
@@ -84,12 +86,10 @@ class ResidualChannelAdapter(nn.Module):
         num_blocks: int = 2,
         intermediate_dim: int = 32,
         drop_path: float = 0.0,
-        target_resolution: Optional[int] = None,
     ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.target_resolution = target_resolution
 
         # Initial projection: in_channels -> intermediate_dim
         self.stem = nn.Sequential(
@@ -124,32 +124,40 @@ class ResidualChannelAdapter(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
+        # Zero-initialize the last projection to ensure identity behavior at start
+        # This makes the initial state equivalent to the pseudo-RGB baseline
+        for m in self.head.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.constant_(m.weight, 0)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass.
+        Forward pass - channel interpolation only.
 
         Args:
             x: Input tensor of shape (B, in_channels, H, W)
 
         Returns:
-            Output tensor of shape (B, out_channels, H', W')
-            where H', W' = target_resolution if specified, else H, W
+            Output tensor of shape (B, out_channels, H, W)
+            Note: Spatial dimensions (H, W) are preserved - no resizing
         """
-        # Channel conversion and feature extraction
-        x = self.stem(x)
-        for block in self.blocks:
-            x = block(x)
-        x = self.head(x)
+        # Identity skip: repeat input channels to match output channels
+        # This ensures step-0 output matches pseudo-RGB baseline
+        raw_chpadded = x.repeat(1, self.out_channels // self.in_channels, 1, 1)
 
-        # Optional upsampling to target resolution
-        if self.target_resolution is not None:
-            if x.shape[-2] != self.target_resolution or x.shape[-1] != self.target_resolution:
-                x = F.interpolate(
-                    x,
-                    size=(self.target_resolution, self.target_resolution),
-                    mode='bilinear',
-                    align_corners=False
-                )
+        # Learned path: channel conversion and feature extraction
+        learned = self.stem(x)
+        for block in self.blocks:
+            learned = block(learned)
+        learned = self.head(learned)
+
+        # Combine identity skip with learned features
+        x = raw_chpadded + learned
+
+        # Enforce [0, 1] range
+        x = torch.clamp(x, 0.0, 1.0)
 
         return x
 

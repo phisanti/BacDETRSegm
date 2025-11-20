@@ -72,10 +72,12 @@ class GradientChannelAdapter(nn.Module):
     [source, dx, dy] where source is the original grayscale image and dx, dy are the
     predicted gradients. These are used as pseudo-RGB input for the backbone.
 
+    This adapter is responsible ONLY for channel interpolation (1 channel -> 3 channels).
+    Image resizing should be handled by the dataloader before the adapter.
+
     Args:
         model_name: Name of the pre-trained model (e.g., "gradconvnext_atto", "gradconvunext_femto")
         weights_path: Path to the pre-trained weights file
-        target_resolution: Optional target resolution for upsampling (e.g., 312, 384, 432)
         freeze: Whether to freeze the model after loading (default: False)
         apply_scaling: Whether to apply linear scaling to gradients from [-1,1] to [0,1] (default: True)
 
@@ -89,14 +91,12 @@ class GradientChannelAdapter(nn.Module):
         self,
         model_name: str,
         weights_path: Optional[str] = None,
-        target_resolution: Optional[int] = None,
         freeze: bool = False,
         apply_scaling: bool = True,
     ):
         super().__init__()
         self.model_name = model_name
         self.weights_path = weights_path
-        self.target_resolution = target_resolution
         self.apply_scaling = apply_scaling
 
         # Build the gradient model
@@ -217,14 +217,14 @@ class GradientChannelAdapter(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass.
+        Forward pass - channel interpolation only.
 
         Args:
             x: Input tensor of shape (B, in_channels, H, W) in range [0, 1]
 
         Returns:
-            Output tensor of shape (B, 3, H', W')
-            where H', W' = target_resolution if specified, else H, W
+            Output tensor of shape (B, 3, H, W)
+            Note: Spatial dimensions (H, W) are preserved - no resizing
 
         Output format: [original_image, dx, dy]
         - Channel 0: Original grayscale image [0, 1]
@@ -257,16 +257,6 @@ class GradientChannelAdapter(nn.Module):
 
         # Concatenate: [original, dx, dy]
         x = torch.cat([original, dx, dy], dim=1)  # [B, 3, H, W]
-
-        # Optional upsampling to target resolution
-        if self.target_resolution is not None:
-            if x.shape[-2] != self.target_resolution or x.shape[-1] != self.target_resolution:
-                x = F.interpolate(
-                    x,
-                    size=(self.target_resolution, self.target_resolution),
-                    mode='bilinear',
-                    align_corners=False
-                )
 
         return x
 

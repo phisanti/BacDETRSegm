@@ -27,7 +27,6 @@ def build_channel_adapter(
     num_blocks: int = 2,
     intermediate_dim: int = 32,
     drop_path: float = 0.0,
-    target_resolution: Optional[int] = None,
     model_name: Optional[str] = None,
     weights_path: Optional[str] = None,
     freeze: bool = False,
@@ -35,16 +34,18 @@ def build_channel_adapter(
     """
     Factory function to build a channel adapter.
 
+    Channel adapters are responsible ONLY for channel interpolation.
+    Image resizing should be handled by the dataloader.
+
     Args:
-        adapter_type: Type of adapter ("residual", "convnext", or "pretrained")
+        adapter_type: Type of adapter ("residual", "convnext", or "gradient")
         in_channels: Number of input channels (e.g., 1 for grayscale)
         out_channels: Number of output channels (typically 3 for RGB)
         num_blocks: Number of blocks in the adapter (for residual/convnext)
         intermediate_dim: Hidden dimension (for residual/convnext)
         drop_path: Stochastic depth rate (for residual/convnext)
-        target_resolution: Optional upsampling resolution (e.g., 312, 384, 432)
-        model_name: Model name for pretrained adapter (e.g., "gradconvnext_atto")
-        weights_path: Path to pre-trained weights (for pretrained adapter)
+        model_name: Model name for gradient adapter (e.g., "gradconvnext_atto")
+        weights_path: Path to pre-trained weights (for gradient adapter)
         freeze: Whether to freeze adapter parameters
 
     Returns:
@@ -57,8 +58,7 @@ def build_channel_adapter(
             in_channels=1,
             out_channels=3,
             num_blocks=2,
-            intermediate_dim=32,
-            target_resolution=432
+            intermediate_dim=32
         )
 
         # ConvNeXt adapter
@@ -68,8 +68,7 @@ def build_channel_adapter(
             out_channels=3,
             num_blocks=2,
             intermediate_dim=64,
-            drop_path=0.1,
-            target_resolution=432
+            drop_path=0.1
         )
 
         # Gradient adapter (pre-trained)
@@ -77,7 +76,6 @@ def build_channel_adapter(
             adapter_type="gradient",
             model_name="gradconvnext_atto",
             weights_path="/path/to/weights.pth",
-            target_resolution=432,
             freeze=True
         )
     """
@@ -90,7 +88,6 @@ def build_channel_adapter(
             num_blocks=num_blocks,
             intermediate_dim=intermediate_dim,
             drop_path=drop_path,
-            target_resolution=target_resolution,
         )
 
     elif adapter_type == "convnext":
@@ -100,7 +97,6 @@ def build_channel_adapter(
             num_blocks=num_blocks,
             intermediate_dim=intermediate_dim,
             drop_path=drop_path,
-            target_resolution=target_resolution,
         )
 
     elif adapter_type == "pretrained" or adapter_type == "gradient":
@@ -110,7 +106,6 @@ def build_channel_adapter(
         adapter = GradientChannelAdapter(
             model_name=model_name,
             weights_path=weights_path,
-            target_resolution=target_resolution,
             freeze=freeze,
         )
 

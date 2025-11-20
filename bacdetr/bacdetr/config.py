@@ -15,7 +15,12 @@ DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is
 
 
 class ChannelAdapterConfig(BaseModel):
-    """Configuration for channel adapter (grayscale -> pseudo-RGB conversion)."""
+    """
+    Configuration for channel adapter (grayscale -> pseudo-RGB conversion).
+
+    Channel adapters are responsible ONLY for channel interpolation.
+    Image resizing should be handled by the dataloader before the adapter.
+    """
     enabled: bool = False
     adapter_type: Literal["residual", "convnext", "gradient", "pretrained"] = "residual"
 
@@ -32,11 +37,6 @@ class ChannelAdapterConfig(BaseModel):
 
     # Training control
     freeze: bool = False
-
-    # Optional upsampling to match backbone input resolution
-    # If None, no upsampling is applied (assumes input already at correct size)
-    # If specified (e.g., 312, 384, 432), will upsample after channel conversion
-    target_resolution: Optional[int] = None
 
 
 class ModelConfig(BaseModel):

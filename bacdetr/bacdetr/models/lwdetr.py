@@ -822,9 +822,6 @@ def build_model(args):
             enabled = getattr(adapter_config, 'enabled', False)
 
         if enabled:
-            # Determine target resolution from model config
-            target_resolution = args.resolution if hasattr(args, 'resolution') else None
-
             if isinstance(adapter_config, dict):
                 # Extract parameters from dict
                 adapter_type = adapter_config.get('adapter_type', 'residual')
@@ -836,8 +833,6 @@ def build_model(args):
                 model_name = adapter_config.get('model_name', None)
                 weights_path = adapter_config.get('weights_path', None)
                 freeze = adapter_config.get('freeze', False)
-                # Allow override of target_resolution from adapter config
-                target_resolution = adapter_config.get('target_resolution', target_resolution)
             else:
                 # Extract parameters from config object
                 adapter_type = adapter_config.adapter_type
@@ -849,7 +844,6 @@ def build_model(args):
                 model_name = adapter_config.model_name
                 weights_path = adapter_config.weights_path
                 freeze = adapter_config.freeze
-                target_resolution = adapter_config.target_resolution or target_resolution
 
             channel_adapter = build_channel_adapter(
                 adapter_type=adapter_type,
@@ -858,7 +852,6 @@ def build_model(args):
                 num_blocks=num_blocks,
                 intermediate_dim=intermediate_dim,
                 drop_path=drop_path,
-                target_resolution=target_resolution,
                 model_name=model_name,
                 weights_path=weights_path,
                 freeze=freeze,
