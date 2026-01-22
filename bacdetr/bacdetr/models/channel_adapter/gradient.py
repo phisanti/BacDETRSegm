@@ -93,11 +93,13 @@ class GradientChannelAdapter(nn.Module):
         weights_path: Optional[str] = None,
         freeze: bool = False,
         apply_scaling: bool = True,
+        target_resolution: Optional[int] = None,
     ):
         super().__init__()
         self.model_name = model_name
         self.weights_path = weights_path
         self.apply_scaling = apply_scaling
+        self.target_resolution = target_resolution
 
         # Build the gradient model
         self.model = self._build_model(model_name)
@@ -217,14 +219,14 @@ class GradientChannelAdapter(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass - channel interpolation only.
+        Forward pass - channel interpolation with optional resolution matching.
 
         Args:
             x: Input tensor of shape (B, in_channels, H, W) in range [0, 1]
 
         Returns:
             Output tensor of shape (B, 3, H, W)
-            Note: Spatial dimensions (H, W) are preserved - no resizing
+            If target_resolution is set, output will be (B, 3, target_resolution, target_resolution)
 
         Output format: [original_image, dx, dy]
         - Channel 0: Original grayscale image [0, 1]
@@ -234,6 +236,21 @@ class GradientChannelAdapter(nn.Module):
         # Store original input
         original = x  # [B, 1, H, W] in [0, 1]
 
+        # Determine target size for output
+        if self.target_resolution is not None:
+            target_size = (self.target_resolution, self.target_resolution)
+        else:
+            target_size = original.shape[-2:]
+
+        # Resize original to target size if needed
+        if original.shape[-2:] != target_size:
+            original = F.interpolate(
+                original,
+                size=target_size,
+                mode="bilinear",
+                align_corners=False,
+            )
+
         # Forward through pre-trained gradient model
         gradients = self.model(x)  # [B, 2, H, W] with [dx, dy] in [-1, 1]
 
@@ -242,6 +259,16 @@ class GradientChannelAdapter(nn.Module):
             raise ValueError(
                 f"Gradient model should output 2 channels [dx, dy], "
                 f"got {gradients.shape[1]} channels"
+            )
+
+        # Resize gradients to match target size if needed
+        # (gradient models may not preserve spatial dimensions due to striding)
+        if gradients.shape[-2:] != target_size:
+            gradients = F.interpolate(
+                gradients,
+                size=target_size,
+                mode="bilinear",
+                align_corners=False,
             )
 
         # Extract gradient channels

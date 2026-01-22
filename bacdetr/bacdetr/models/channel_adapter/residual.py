@@ -69,8 +69,8 @@ class ResidualChannelAdapter(nn.Module):
     """
     Lightweight residual channel adapter for grayscale -> pseudo-RGB conversion.
 
-    This adapter is responsible ONLY for channel interpolation (1 channel -> 3 channels).
-    Image resizing should be handled by the dataloader before the adapter.
+    This adapter performs channel interpolation (1 channel -> 3 channels) and
+    optionally resizes output to match target_resolution for backbone compatibility.
 
     Args:
         in_channels: Number of input channels (e.g., 1 for grayscale)
@@ -78,6 +78,7 @@ class ResidualChannelAdapter(nn.Module):
         num_blocks: Number of residual blocks (2-4 typical)
         intermediate_dim: Hidden dimension for processing (32-64 typical)
         drop_path: Stochastic depth rate (0.0-0.2 for regularization)
+        target_resolution: Optional target output resolution (e.g., 432 to match backbone)
     """
     def __init__(
         self,
@@ -86,10 +87,12 @@ class ResidualChannelAdapter(nn.Module):
         num_blocks: int = 2,
         intermediate_dim: int = 32,
         drop_path: float = 0.0,
+        target_resolution: Optional[int] = None,
     ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
+        self.target_resolution = target_resolution
 
         # Initial projection: in_channels -> intermediate_dim
         self.stem = nn.Sequential(
@@ -134,14 +137,14 @@ class ResidualChannelAdapter(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass - channel interpolation only.
+        Forward pass - channel interpolation with optional resolution matching.
 
         Args:
             x: Input tensor of shape (B, in_channels, H, W)
 
         Returns:
             Output tensor of shape (B, out_channels, H, W)
-            Note: Spatial dimensions (H, W) are preserved - no resizing
+            If target_resolution is set, output will be (B, out_channels, target_resolution, target_resolution)
         """
         # Identity skip: repeat input channels to match output channels
         # This ensures step-0 output matches pseudo-RGB baseline
@@ -158,6 +161,17 @@ class ResidualChannelAdapter(nn.Module):
 
         # Enforce [0, 1] range
         x = torch.clamp(x, 0.0, 1.0)
+
+        # Resize to target resolution if specified
+        if self.target_resolution is not None:
+            target_size = (self.target_resolution, self.target_resolution)
+            if x.shape[-2:] != target_size:
+                x = F.interpolate(
+                    x,
+                    size=target_size,
+                    mode="bilinear",
+                    align_corners=False,
+                )
 
         return x
 

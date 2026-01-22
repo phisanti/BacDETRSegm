@@ -833,6 +833,7 @@ def build_model(args):
                 model_name = adapter_config.get('model_name', None)
                 weights_path = adapter_config.get('weights_path', None)
                 freeze = adapter_config.get('freeze', False)
+                target_resolution = adapter_config.get('target_resolution', None)
             else:
                 # Extract parameters from config object
                 adapter_type = adapter_config.adapter_type
@@ -844,6 +845,7 @@ def build_model(args):
                 model_name = adapter_config.model_name
                 weights_path = adapter_config.weights_path
                 freeze = adapter_config.freeze
+                target_resolution = getattr(adapter_config, 'target_resolution', None)
 
             channel_adapter = build_channel_adapter(
                 adapter_type=adapter_type,
@@ -855,8 +857,9 @@ def build_model(args):
                 model_name=model_name,
                 weights_path=weights_path,
                 freeze=freeze,
+                target_resolution=target_resolution,
             )
-            print(f"Built channel adapter: {adapter_type} ({in_channels}->{out_channels} channels)")
+            print(f"Built channel adapter: {adapter_type} ({in_channels}->{out_channels} channels, target_resolution={target_resolution})")
 
     # Build post-adapter normalization if configured
     post_adapter_norm = None

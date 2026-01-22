@@ -30,12 +30,13 @@ def build_channel_adapter(
     model_name: Optional[str] = None,
     weights_path: Optional[str] = None,
     freeze: bool = False,
+    target_resolution: Optional[int] = None,
 ) -> nn.Module:
     """
     Factory function to build a channel adapter.
 
-    Channel adapters are responsible ONLY for channel interpolation.
-    Image resizing should be handled by the dataloader.
+    Channel adapters perform channel interpolation and optionally resize
+    output to match the target_resolution for backbone compatibility.
 
     Args:
         adapter_type: Type of adapter ("residual", "convnext", or "gradient")
@@ -47,6 +48,7 @@ def build_channel_adapter(
         model_name: Model name for gradient adapter (e.g., "gradconvnext_atto")
         weights_path: Path to pre-trained weights (for gradient adapter)
         freeze: Whether to freeze adapter parameters
+        target_resolution: Optional target output resolution (e.g., 432 to match backbone)
 
     Returns:
         Channel adapter module
@@ -88,6 +90,7 @@ def build_channel_adapter(
             num_blocks=num_blocks,
             intermediate_dim=intermediate_dim,
             drop_path=drop_path,
+            target_resolution=target_resolution,
         )
 
     elif adapter_type == "convnext":
@@ -97,6 +100,7 @@ def build_channel_adapter(
             num_blocks=num_blocks,
             intermediate_dim=intermediate_dim,
             drop_path=drop_path,
+            target_resolution=target_resolution,
         )
 
     elif adapter_type == "pretrained" or adapter_type == "gradient":
@@ -107,6 +111,7 @@ def build_channel_adapter(
             model_name=model_name,
             weights_path=weights_path,
             freeze=freeze,
+            target_resolution=target_resolution,
         )
 
     else:
