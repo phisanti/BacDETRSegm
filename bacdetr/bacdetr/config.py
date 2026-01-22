@@ -82,9 +82,9 @@ class ModelConfig(BaseModel):
         return values
 
 
-class RFDETRBaseConfig(ModelConfig):
+class BacDETRBaseConfig(ModelConfig):
     """
-    The configuration for an RF-DETR Base model.
+    The configuration for a BacDETR Base model (scientific/grayscale images).
     """
     encoder: Literal["dinov2_windowed_small", "dinov2_windowed_base"] = "dinov2_windowed_small"
     hidden_dim: int = 256
@@ -102,9 +102,9 @@ class RFDETRBaseConfig(ModelConfig):
     resolution: int = 560
     positional_encoding_size: int = 37
 
-class RFDETRLargeConfig(RFDETRBaseConfig):
+class BacDETRLargeConfig(BacDETRBaseConfig):
     """
-    The configuration for an RF-DETR Large model.
+    The configuration for a BacDETR Large model.
     """
     encoder: Literal["dinov2_windowed_small", "dinov2_windowed_base"] = "dinov2_windowed_base"
     hidden_dim: int = 384
@@ -114,9 +114,9 @@ class RFDETRLargeConfig(RFDETRBaseConfig):
     projector_scale: List[Literal["P3", "P4", "P5"]] = ["P3", "P5"]
     pretrain_weights: Optional[str] = "rf-detr-large.pth"
 
-class RFDETRNanoConfig(RFDETRBaseConfig):
+class BacDETRNanoConfig(BacDETRBaseConfig):
     """
-    The configuration for an RF-DETR Nano model.
+    The configuration for a BacDETR Nano model.
     """
     out_feature_indexes: List[int] = [3, 6, 9, 12]
     num_windows: int = 2
@@ -126,9 +126,9 @@ class RFDETRNanoConfig(RFDETRBaseConfig):
     positional_encoding_size: int = 24
     pretrain_weights: Optional[str] = "rf-detr-nano.pth"
 
-class RFDETRSmallConfig(RFDETRBaseConfig):
+class BacDETRSmallConfig(BacDETRBaseConfig):
     """
-    The configuration for an RF-DETR Small model.
+    The configuration for a BacDETR Small model.
     """
     out_feature_indexes: List[int] = [3, 6, 9, 12]
     num_windows: int = 2
@@ -138,9 +138,9 @@ class RFDETRSmallConfig(RFDETRBaseConfig):
     positional_encoding_size: int = 32
     pretrain_weights: Optional[str] = "rf-detr-small.pth"
 
-class RFDETRMediumConfig(RFDETRBaseConfig):
+class BacDETRMediumConfig(BacDETRBaseConfig):
     """
-    The configuration for an RF-DETR Medium model.
+    The configuration for a BacDETR Medium model.
     """
     out_feature_indexes: List[int] = [3, 6, 9, 12]
     num_windows: int = 2
@@ -150,7 +150,7 @@ class RFDETRMediumConfig(RFDETRBaseConfig):
     positional_encoding_size: int = 36
     pretrain_weights: Optional[str] = "rf-detr-medium.pth"
 
-class RFDETRSegPreviewConfig(RFDETRBaseConfig):
+class BacDETRSegConfig(BacDETRBaseConfig):
     segmentation_head: bool = True
     out_feature_indexes: List[int] = [3, 6, 9, 12]
     num_windows: int = 2

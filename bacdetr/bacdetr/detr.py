@@ -1,7 +1,10 @@
 # ------------------------------------------------------------------------
-# RF-DETR
-# Copyright (c) 2025 Roboflow. All Rights Reserved.
+# BacDETR
+# Copyright (c) 2025. All Rights Reserved.
 # Licensed under the Apache License, Version 2.0 [see LICENSE for details]
+# ------------------------------------------------------------------------
+# Adapted from RF-DETR (https://github.com/roboflow/rf-detr)
+# Copyright (c) 2025 Roboflow. All Rights Reserved.
 # ------------------------------------------------------------------------
 
 
@@ -24,12 +27,12 @@ except:
 
 from bacdetr.config import (
     ModelConfig,
-    RFDETRBaseConfig,
-    RFDETRLargeConfig,
-    RFDETRMediumConfig,
-    RFDETRNanoConfig,
-    RFDETRSegPreviewConfig,
-    RFDETRSmallConfig,
+    BacDETRBaseConfig,
+    BacDETRLargeConfig,
+    BacDETRMediumConfig,
+    BacDETRNanoConfig,
+    BacDETRSegConfig,
+    BacDETRSmallConfig,
 )
 from bacdetr.util.files import download_file
 from bacdetr.util.coco_classes import COCO_CLASSES
@@ -47,11 +50,16 @@ HOSTED_MODELS = {
     "rf-detr-seg-preview.pt": "https://storage.googleapis.com/rfdetr/rf-detr-seg-preview.pt",
 }
 
-class RFDETR(ABC):
+class BacDETR(ABC):
     """
-    The base RF-DETR class implements the core methods for training RF-DETR models,
-    running inference on the models, optimising models, and uploading trained
-    models for deployment.
+    The base BacDETR class implements the core methods for training BacDETR models
+    on scientific/grayscale images, running inference, optimizing models, and
+    uploading trained models for deployment.
+
+    BacDETR extends RF-DETR with support for:
+    - Single-channel (grayscale) input images
+    - Channel adapters for grayscale -> pseudo-RGB conversion
+    - Post-adapter normalization for DinoV2 backbone compatibility
     """
     means = [0.485, 0.456, 0.406]
     stds = [0.229, 0.224, 0.225]
@@ -308,73 +316,77 @@ class RFDETR(ABC):
 
 
 
-class RFDETRBase(RFDETR):
-    """RF-DETR Base (29M parameters)."""
+class BacDETRBase(BacDETR):
+    """BacDETR Base (29M parameters)."""
 
-    size = "rfdetr-base"
+    size = "bacdetr-base"
 
     def get_model_config(self, **kwargs):
-        return RFDETRBaseConfig(**kwargs)
+        return BacDETRBaseConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
         raise NotImplementedError
 
 
-class RFDETRLarge(RFDETR):
-    """RF-DETR Large."""
+class BacDETRLarge(BacDETR):
+    """BacDETR Large."""
 
-    size = "rfdetr-large"
+    size = "bacdetr-large"
 
     def get_model_config(self, **kwargs):
-        return RFDETRLargeConfig(**kwargs)
+        return BacDETRLargeConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
         raise NotImplementedError
 
 
-class RFDETRNano(RFDETR):
-    """RF-DETR Nano."""
+class BacDETRNano(BacDETR):
+    """BacDETR Nano."""
 
-    size = "rfdetr-nano"
+    size = "bacdetr-nano"
 
     def get_model_config(self, **kwargs):
-        return RFDETRNanoConfig(**kwargs)
+        return BacDETRNanoConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
         raise NotImplementedError
 
 
-class RFDETRSmall(RFDETR):
-    """RF-DETR Small."""
+class BacDETRSmall(BacDETR):
+    """BacDETR Small."""
 
-    size = "rfdetr-small"
+    size = "bacdetr-small"
 
     def get_model_config(self, **kwargs):
-        return RFDETRSmallConfig(**kwargs)
+        return BacDETRSmallConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
         raise NotImplementedError
 
 
-class RFDETRMedium(RFDETR):
-    """RF-DETR Medium."""
+class BacDETRMedium(BacDETR):
+    """BacDETR Medium."""
 
-    size = "rfdetr-medium"
+    size = "bacdetr-medium"
 
     def get_model_config(self, **kwargs):
-        return RFDETRMediumConfig(**kwargs)
+        return BacDETRMediumConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
         raise NotImplementedError
 
 
-class RFDETRSegPreview(RFDETR):
-    """RF-DETR Segmentation Preview variant."""
+class BacDETRSeg(BacDETR):
+    """BacDETR Segmentation variant for instance segmentation."""
 
-    size = "rfdetr-seg-preview"
+    size = "bacdetr-seg"
 
     def get_model_config(self, **kwargs):
-        return RFDETRSegPreviewConfig(**kwargs)
+        return BacDETRSegConfig(**kwargs)
 
     def get_train_config(self, **kwargs):
         raise NotImplementedError
+
+
+# Backwards compatibility aliases
+RFDETRSegPreview = BacDETRSeg

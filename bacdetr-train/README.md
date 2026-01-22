@@ -25,11 +25,11 @@ pip install .[all]
 
 ```python
 from bacdetr_train.trainer import Model
-from bacdetr.config import RFDETRBaseConfig
+from bacdetr.config import BacDETRBaseConfig
 from bacdetr_train.config import TrainConfig
 
 # Configure model
-model_config = RFDETRBaseConfig(num_classes=3)
+model_config = BacDETRBaseConfig(num_classes=3)
 
 # Configure training
 train_config = TrainConfig(

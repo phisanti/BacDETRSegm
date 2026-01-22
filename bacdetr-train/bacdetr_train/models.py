@@ -1,4 +1,4 @@
-"""Training-aware RF-DETR wrappers."""
+"""Training-aware BacDETR wrappers."""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ from collections import defaultdict
 from typing import Any
 
 from bacdetr.detr import (
-    RFDETR,
-    RFDETRBase,
-    RFDETRLarge,
-    RFDETRMedium,
-    RFDETRNano,
-    RFDETRSegPreview,
-    RFDETRSmall,
+    BacDETR,
+    BacDETRBase,
+    BacDETRLarge,
+    BacDETRMedium,
+    BacDETRNano,
+    BacDETRSeg,
+    BacDETRSmall,
 )
 from bacdetr_train.util.coco_classes import COCO_CLASSES
 from bacdetr_train.util.early_stopping import EarlyStoppingCallback
@@ -26,8 +26,8 @@ from bacdetr_train.util.metrics import (
 )
 
 
-class TrainableRFDETR(RFDETR):
-    """Mixin that reintroduces training support for RF-DETR models."""
+class TrainableBacDETR(BacDETR):
+    """Mixin that reintroduces training support for BacDETR models."""
 
     train_config_cls = TrainConfig
 
@@ -120,25 +120,25 @@ class TrainableRFDETR(RFDETR):
         )
 
 
-class TrainableRFDETRBase(TrainableRFDETR, RFDETRBase):
+class TrainableBacDETRBase(TrainableBacDETR, BacDETRBase):
     pass
 
 
-class TrainableRFDETRLarge(TrainableRFDETR, RFDETRLarge):
+class TrainableBacDETRLarge(TrainableBacDETR, BacDETRLarge):
     pass
 
 
-class TrainableRFDETRMedium(TrainableRFDETR, RFDETRMedium):
+class TrainableBacDETRMedium(TrainableBacDETR, BacDETRMedium):
     pass
 
 
-class TrainableRFDETRSmall(TrainableRFDETR, RFDETRSmall):
+class TrainableBacDETRSmall(TrainableBacDETR, BacDETRSmall):
     pass
 
 
-class TrainableRFDETRNano(TrainableRFDETR, RFDETRNano):
+class TrainableBacDETRNano(TrainableBacDETR, BacDETRNano):
     pass
 
 
-class TrainableRFDETRSegPreview(TrainableRFDETR, RFDETRSegPreview):
+class TrainableBacDETRSeg(TrainableBacDETR, BacDETRSeg):
     train_config_cls = SegmentationTrainConfig

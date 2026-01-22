@@ -16,17 +16,17 @@ pip install .[viz]
 ## Usage
 
 ```python
-from bacdetr import RFDETRBase
-from bacdetr.config import RFDETRBaseConfig
+from bacdetr import BacDETRBase
+from bacdetr.config import BacDETRBaseConfig
 
 # Create model config
-config = RFDETRBaseConfig(
+config = BacDETRBaseConfig(
     num_classes=3,
     pretrain_weights="path/to/checkpoint.pth"
 )
 
 # Initialize model (TODO: refactor inference API)
-# model = RFDETRBase(**config.dict())
+# model = BacDETRBase(**config.dict())
 ```
 
 ## Note

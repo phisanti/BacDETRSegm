@@ -15,23 +15,43 @@ if os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK") is None:
 # Export config classes (core inference package)
 from bacdetr.config import (
     ModelConfig,
-    RFDETRBaseConfig,
-    RFDETRLargeConfig,
-    RFDETRNanoConfig,
-    RFDETRSmallConfig,
-    RFDETRMediumConfig,
-    RFDETRSegPreviewConfig,
+    ChannelAdapterConfig,
+    BacDETRBaseConfig,
+    BacDETRLargeConfig,
+    BacDETRNanoConfig,
+    BacDETRSmallConfig,
+    BacDETRMediumConfig,
+    BacDETRSegConfig,
 )
 
-# TODO: Refactor detr.py to separate inference from training logic
-# from bacdetr.detr import RFDETRBase, RFDETRLarge, RFDETRNano, RFDETRSmall, RFDETRMedium, RFDETRSegPreview
+# Export model classes
+from bacdetr.detr import (
+    BacDETR,
+    BacDETRBase,
+    BacDETRLarge,
+    BacDETRNano,
+    BacDETRSmall,
+    BacDETRMedium,
+    BacDETRSeg,
+)
 
 __all__ = [
+    # Base classes
     "ModelConfig",
-    "RFDETRBaseConfig",
-    "RFDETRLargeConfig",
-    "RFDETRNanoConfig",
-    "RFDETRSmallConfig",
-    "RFDETRMediumConfig",
-    "RFDETRSegPreviewConfig",
+    "ChannelAdapterConfig",
+    "BacDETR",
+    # Config classes
+    "BacDETRBaseConfig",
+    "BacDETRLargeConfig",
+    "BacDETRNanoConfig",
+    "BacDETRSmallConfig",
+    "BacDETRMediumConfig",
+    "BacDETRSegConfig",
+    # Model classes
+    "BacDETRBase",
+    "BacDETRLarge",
+    "BacDETRNano",
+    "BacDETRSmall",
+    "BacDETRMedium",
+    "BacDETRSeg",
 ]
