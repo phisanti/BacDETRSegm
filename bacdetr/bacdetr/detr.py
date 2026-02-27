@@ -33,6 +33,8 @@ from bacdetr.config import (
     BacDETRNanoConfig,
     BacDETRSegConfig,
     BacDETRSmallConfig,
+    BacDETRRecallerConfig,
+    GradBacDETRConfig,
 )
 from bacdetr.util.files import download_file
 from bacdetr.util.coco_classes import COCO_CLASSES
@@ -386,6 +388,24 @@ class BacDETRSeg(BacDETR):
 
     def get_train_config(self, **kwargs):
         raise NotImplementedError
+
+
+class GradBacDETR(BacDETRSeg):
+    """BacDETR segmentation variant with a fixed GradientConvNeXt adapter."""
+
+    size = "grad-bacdetr"
+
+    def get_model_config(self, **kwargs):
+        return GradBacDETRConfig(**kwargs)
+
+
+class BacDETRRecaller(BacDETRSeg):
+    """BacDETR segmentation variant tuned for higher recall on small objects."""
+
+    size = "bacdetr-recaller"
+
+    def get_model_config(self, **kwargs):
+        return BacDETRRecallerConfig(**kwargs)
 
 
 # Backwards compatibility aliases

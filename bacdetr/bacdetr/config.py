@@ -34,6 +34,7 @@ class ChannelAdapterConfig(BaseModel):
     # For pretrained adapters (GradConvNeXt/UNeXt)
     model_name: Optional[str] = None  # e.g., "gradconvnext_atto", "gradconvunext_small"
     weights_path: Optional[str] = None
+    target_resolution: Optional[int] = None
 
     # Training control
     freeze: bool = False
@@ -162,3 +163,43 @@ class BacDETRSegConfig(BacDETRBaseConfig):
     num_select: int = 200
     pretrain_weights: Optional[str] = "rf-detr-seg-preview.pt"
     num_classes: int = 90
+
+
+class BacDETRRecallerConfig(BacDETRSegConfig):
+    """
+    Recall-optimized BacDETR segmentation config for small objects.
+
+    Keeps the DINOv2-compatible backbone settings while increasing
+    high-resolution feature usage and mask detail.
+    """
+    projector_scale: List[Literal["P3", "P4", "P5"]] = ["P3", "P4"]
+    num_select: int = 400
+    mask_downsample_ratio: int = 2
+
+
+class GradBacDETRConfig(BacDETRSegConfig):
+    """
+    BacDETR segmentation config with a fixed GradientConvNeXt adapter.
+    """
+    channel_adapter: ChannelAdapterConfig = Field(
+        default_factory=lambda: ChannelAdapterConfig(
+            enabled=True,
+            adapter_type="gradient",
+            model_name="gradconvnext_atto",
+        )
+    )
+
+    @model_validator(mode="after")
+    def _enforce_grad_adapter(self):
+        adapter = self.channel_adapter or ChannelAdapterConfig(
+            enabled=True,
+            adapter_type="gradient",
+            model_name="gradconvnext_atto",
+        )
+        adapter.enabled = True
+        adapter.adapter_type = "gradient"
+        adapter.model_name = "gradconvnext_atto"
+        if adapter.target_resolution is None:
+            adapter.target_resolution = self.resolution
+        self.channel_adapter = adapter
+        return self

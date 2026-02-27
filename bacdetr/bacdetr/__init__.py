@@ -22,6 +22,8 @@ from bacdetr.config import (
     BacDETRSmallConfig,
     BacDETRMediumConfig,
     BacDETRSegConfig,
+    BacDETRRecallerConfig,
+    GradBacDETRConfig,
 )
 
 # Export model classes
@@ -33,6 +35,8 @@ from bacdetr.detr import (
     BacDETRSmall,
     BacDETRMedium,
     BacDETRSeg,
+    GradBacDETR,
+    BacDETRRecaller,
 )
 
 __all__ = [
@@ -47,6 +51,8 @@ __all__ = [
     "BacDETRSmallConfig",
     "BacDETRMediumConfig",
     "BacDETRSegConfig",
+    "BacDETRRecallerConfig",
+    "GradBacDETRConfig",
     # Model classes
     "BacDETRBase",
     "BacDETRLarge",
@@ -54,4 +60,6 @@ __all__ = [
     "BacDETRSmall",
     "BacDETRMedium",
     "BacDETRSeg",
+    "GradBacDETR",
+    "BacDETRRecaller",
 ]
