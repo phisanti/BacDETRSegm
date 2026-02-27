@@ -9,7 +9,7 @@
 
 
 from pydantic import BaseModel, Field, model_validator
-from typing import List, Optional, Literal, Type, Union
+from typing import List, Optional, Literal
 import torch
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 

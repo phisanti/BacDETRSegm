@@ -21,7 +21,6 @@ from __future__ import division
 
 import warnings
 import math
-import numpy as np
 
 import torch
 from torch import nn
