@@ -11,8 +11,10 @@ from bacdetr.detr import (
     BacDETRLarge,
     BacDETRMedium,
     BacDETRNano,
+    BacDETRRecaller,
     BacDETRSeg,
     BacDETRSmall,
+    GradBacDETR,
 )
 from bacdetr_train.util.coco_classes import COCO_CLASSES
 from bacdetr_train.util.early_stopping import EarlyStoppingCallback
@@ -141,4 +143,12 @@ class TrainableBacDETRNano(TrainableBacDETR, BacDETRNano):
 
 
 class TrainableBacDETRSeg(TrainableBacDETR, BacDETRSeg):
+    train_config_cls = SegmentationTrainConfig
+
+
+class TrainableBacDETRRecaller(TrainableBacDETR, BacDETRRecaller):
+    train_config_cls = SegmentationTrainConfig
+
+
+class TrainableGradBacDETR(TrainableBacDETR, GradBacDETR):
     train_config_cls = SegmentationTrainConfig
