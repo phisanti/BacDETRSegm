@@ -205,7 +205,7 @@ class GradientChannelAdapter(nn.Module):
                 if isinstance(module, nn.Conv2d):
                     return module.in_channels
             return 1  # Default fallback
-        except:
+        except Exception:
             return 1  # Default fallback
 
     def _get_out_channels(self) -> int:

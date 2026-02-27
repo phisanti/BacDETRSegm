@@ -170,7 +170,7 @@ class LWDETR(nn.Module):
 
         srcs = []
         masks = []
-        for l, feat in enumerate(features):
+        for lvl, feat in enumerate(features):
             src, mask = feat.decompose()
             srcs.append(src)
             masks.append(mask)
@@ -776,7 +776,7 @@ class PostProcess(nn.Module):
                 res_i['masks'] = masks_i > 0.0
                 results.append(res_i)
         else:
-            results = [{'scores': s, 'labels': l, 'boxes': b} for s, l, b in zip(scores, labels, boxes)]
+            results = [{'scores': s, 'labels': lbl, 'boxes': b} for s, lbl, b in zip(scores, labels, boxes)]
 
         return results
 
@@ -806,8 +806,6 @@ def build_model(args):
     # For more details on this, check the following discussion
     # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
     num_classes = args.num_classes + 1
-    device = torch.device(args.device)
-
     # Build channel adapter if configured
     channel_adapter = None
     if hasattr(args, 'channel_adapter') and args.channel_adapter is not None:
@@ -951,7 +949,7 @@ def build_criterion_and_postprocessors(args):
 
     try:
         sum_group_losses = args.sum_group_losses
-    except:
+    except AttributeError:
         sum_group_losses = False
     if args.segmentation_head:
         criterion = SetCriterion(args.num_classes + 1, matcher=matcher, weight_dict=weight_dict,

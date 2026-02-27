@@ -60,7 +60,6 @@ class Backbone(BackboneBase):
         # and the start should be dinov2
         name_parts = name.split("_")
         assert name_parts[0] == "dinov2"
-        size = name_parts[-1]
         use_registers = False
         if "registers" in name_parts:
             use_registers = True

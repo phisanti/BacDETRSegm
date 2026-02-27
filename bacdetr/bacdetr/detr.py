@@ -22,7 +22,7 @@ from PIL import Image
 
 try:
     torch.set_float32_matmul_precision('high')
-except:
+except Exception:
     pass
 
 from bacdetr.config import (

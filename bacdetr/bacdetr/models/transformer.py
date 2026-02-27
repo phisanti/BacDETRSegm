@@ -80,7 +80,6 @@ def gen_encoder_output_proposals(memory, memory_padding_mask, spatial_shapes, un
         - output_proposals: bs, \sum{hw}, 4
     """
     N_, S_, C_ = memory.shape
-    base_scale = 4.0
     proposals = []
     _cur = 0
     for lvl, (H_, W_) in enumerate(spatial_shapes):
@@ -558,7 +557,7 @@ def build_transformer(args):
     
     try:
         two_stage = args.two_stage
-    except:
+    except AttributeError:
         two_stage = False
 
     return Transformer(
