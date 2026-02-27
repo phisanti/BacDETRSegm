@@ -151,17 +151,9 @@ class BacDETR(ABC):
         raise NotImplementedError
 
     def get_model(self, config: ModelConfig):
-        """
-        Retrieve a model instance based on the provided configuration.
-        """
-        try:
-            from bacdetr_train.trainer import Model as TrainerModel  # type: ignore
-        except ImportError as exc:  # pragma: no cover
-            raise ImportError(
-                "bacdetr_train is required to instantiate RF-DETR models. "
-                "Install bacdetr-train or override get_model in your subclass."
-            ) from exc
-        return TrainerModel(**config.dict())
+        """Retrieve a model instance based on the provided configuration."""
+        from bacdetr.model import InferenceModel
+        return InferenceModel(**config.dict())
     
     # Get class_names from the model
     @property

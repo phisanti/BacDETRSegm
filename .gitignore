@@ -185,4 +185,4 @@ configs/
 AGENTS.md
 
 train_test.py
-tests/
+/tests/
