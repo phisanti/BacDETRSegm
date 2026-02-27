@@ -32,6 +32,8 @@ import torch
 import torchvision.transforms.functional as F
 import tqdm
 
+from bacdetr_train.util.box_ops import box_xyxy_to_cxcywh
+
 import pycuda.driver as cuda
 import onnxruntime as nxrun
 import tensorrt as trt
@@ -303,7 +305,7 @@ def post_process(outputs, target_sizes):
     scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
     boxes = boxes * scale_fct[:, None, :]
 
-    results = [{'scores': s, 'labels': l, 'boxes': b} for s, l, b in zip(scores, labels, boxes)]
+    results = [{'scores': s, 'labels': lbl, 'boxes': b} for s, lbl, b in zip(scores, labels, boxes)]
 
     return results
 
@@ -355,9 +357,6 @@ def infer_engine(model, coco_evaluator, time_profile, prefix, img_list, device, 
 
         samples = image_tensor[None].to(device)
         _, _, h, w = samples.shape
-        im_shape = torch.Tensor(np.array([h, w]).reshape((1, 2)).astype(np.float32)).to(device)
-        scale_factor = torch.Tensor(np.array([h / height, w / width]).reshape((1, 2)).astype(np.float32)).to(device)
-        
         time_profile.reset()
         with time_profile:
             for _ in range(repeats):

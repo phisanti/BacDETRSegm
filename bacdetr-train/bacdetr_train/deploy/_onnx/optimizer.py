@@ -211,12 +211,12 @@ class OnnxOptimizer():
                 inputTensor = node.inputs[0]
 
                 gammaNode = node.o().o().o().o().o().o().o().o().o().o().o()
-                index = [type(i) == gs.ir.tensor.Constant for i in gammaNode.inputs].index(True)
+                index = [isinstance(i, gs.ir.tensor.Constant) for i in gammaNode.inputs].index(True)
                 gamma = np.array(deepcopy(gammaNode.inputs[index].values.tolist()), dtype=np.float32)
                 constantGamma = gs.Constant("groupNormGamma-" + str(nGroupNormPlugin), np.ascontiguousarray(gamma.reshape(-1)))  # MUST use np.ascontiguousarray, or TRT will regard the shape of this Constant as (0) !!!
 
                 betaNode = gammaNode.o()
-                index = [type(i) == gs.ir.tensor.Constant for i in betaNode.inputs].index(True)
+                index = [isinstance(i, gs.ir.tensor.Constant) for i in betaNode.inputs].index(True)
                 beta = np.array(deepcopy(betaNode.inputs[index].values.tolist()), dtype=np.float32)
                 constantBeta = gs.Constant("groupNormBeta-" + str(nGroupNormPlugin), np.ascontiguousarray(beta.reshape(-1)))
 
@@ -267,12 +267,12 @@ class OnnxOptimizer():
                     inputTensor = node.i().inputs[0]  # UNet and VAE
 
                 gammaNode = node.o().o().o().o().o().o().o()
-                index = [type(i) == gs.ir.tensor.Constant for i in gammaNode.inputs].index(True)
+                index = [isinstance(i, gs.ir.tensor.Constant) for i in gammaNode.inputs].index(True)
                 gamma = np.array(deepcopy(gammaNode.inputs[index].values.tolist()), dtype=np.float32)
                 constantGamma = gs.Constant("LayerNormGamma-" + str(nLayerNormPlugin), np.ascontiguousarray(gamma.reshape(-1)))  # MUST use np.ascontiguousarray, or TRT will regard the shape of this Constant as (0) !!!
 
                 betaNode = gammaNode.o()
-                index = [type(i) == gs.ir.tensor.Constant for i in betaNode.inputs].index(True)
+                index = [isinstance(i, gs.ir.tensor.Constant) for i in betaNode.inputs].index(True)
                 beta = np.array(deepcopy(betaNode.inputs[index].values.tolist()), dtype=np.float32)
                 constantBeta = gs.Constant("LayerNormBeta-" + str(nLayerNormPlugin), np.ascontiguousarray(beta.reshape(-1)))
 

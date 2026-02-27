@@ -51,7 +51,7 @@ def convert_coco_poly_to_mask(segmentations, height, width):
             continue
         try:
             rles = coco_mask.frPyObjects(polygons, height, width)
-        except:
+        except Exception:
             rles = polygons
         mask = coco_mask.decode(rles)
         if mask.ndim < 3:
@@ -357,13 +357,8 @@ def build_coco(image_set, args, resolution, root):
     img_folder, ann_file = PATHS[image_set.split("_")[0]]
     
     try:
-        square_resize = args.square_resize
-    except:
-        square_resize = False
-    
-    try:
         square_resize_div_64 = args.square_resize_div_64
-    except:
+    except AttributeError:
         square_resize_div_64 = False
 
     # Decide on normalization + channel padding based on preprocessing config
@@ -446,12 +441,12 @@ def build_roboflow(image_set, args, resolution, root):
 
     try:
         square_resize_div_64 = args.square_resize_div_64
-    except:
+    except AttributeError:
         square_resize_div_64 = False
 
     try:
         include_masks = args.segmentation_head
-    except:
+    except AttributeError:
         include_masks = False
 
     # Get number of input channels
