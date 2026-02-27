@@ -16,7 +16,6 @@ from bacdetr.detr import (
     BacDETRSmall,
     GradBacDETR,
 )
-from bacdetr_train.util.coco_classes import COCO_CLASSES
 from bacdetr_train.util.early_stopping import EarlyStoppingCallback
 
 from bacdetr_train.config import SegmentationTrainConfig, TrainConfig
